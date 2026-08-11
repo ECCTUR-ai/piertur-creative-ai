@@ -19,11 +19,9 @@ import {
   LayoutGrid,
   Square,
   Wand2,
-  Download,
-  Edit3,
 } from 'lucide-react';
 import { campaignFormSchema, CampaignFormData, defaultCampaignData } from '@/lib/validation/campaignSchema';
-import { ContentType, FormatType, DesignModel, CampaignInfo } from '@/types';
+import { ContentType, FormatType, CampaignInfo } from '@/types';
 import { generateAllVariants } from '@/lib/templates/variantGenerator';
 import { DesignRepository } from '@/lib/storage/designRepository';
 
@@ -67,7 +65,6 @@ export const WizardFlow: React.FC = () => {
   const [format, setFormat] = useState<FormatType>('IG_STORY');
   const [selectedPhoto, setSelectedPhoto] = useState<string>(SAMPLE_PHOTOS[0].url);
   const [customTagInput, setCustomTagInput] = useState<string>('');
-  const [generatedVariants, setGeneratedVariants] = useState<DesignModel[]>([]);
 
   const {
     register,
@@ -142,18 +139,16 @@ export const WizardFlow: React.FC = () => {
     };
 
     const variants = generateAllVariants(campaignPayload);
-    variants.forEach((v) => DesignRepository.save(v));
+    const generationId = 'gen_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
 
-    setGeneratedVariants(variants);
-    setCurrentStep(5);
-  };
+    DesignRepository.saveGenerationGroup(generationId, variants);
 
-  const handleSelectVariant = (design: DesignModel) => {
-    router.push(`/studio/${design.id}`);
+    // Route directly to Generated Designs page
+    router.push(`/designs/generated/${generationId}`);
   };
 
   return (
-    <div className="max-w-6xl mx-auto py-6 px-4">
+    <div className="max-w-5xl mx-auto py-6 px-4">
       {/* Wizard Progress Indicator */}
       <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs mb-8">
         <div className="flex items-center justify-between">
@@ -161,8 +156,7 @@ export const WizardFlow: React.FC = () => {
             { step: 1, title: 'İçerik Türü' },
             { step: 2, title: 'Format' },
             { step: 3, title: 'Kampanya Bilgileri' },
-            { step: 4, title: 'Fotoğraf & Medya' },
-            { step: 5, title: 'Otomatik Kreatifler' },
+            { step: 4, title: 'Fotoğraf & Üretim' },
           ].map((item, index, arr) => (
             <React.Fragment key={item.step}>
               <div className="flex items-center space-x-3">
@@ -653,7 +647,7 @@ export const WizardFlow: React.FC = () => {
         </form>
       )}
 
-      {/* STEP 4: MEDIA SELECTION */}
+      {/* STEP 4: MEDIA SELECTION & TASARIMLARI OLUŞTUR */}
       {currentStep === 4 && (
         <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between mb-1">
@@ -752,80 +746,6 @@ export const WizardFlow: React.FC = () => {
               <Sparkles className="w-5 h-5 text-[#FFB21C]" />
               <span>TASARIMLARI OLUŞTUR</span>
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 5: AUTOMATED 3-VARIANT CREATIVE PREVIEW SCREEN */}
-      {currentStep === 5 && (
-        <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <h2 className="text-2xl font-extrabold text-[#082E63]">
-                Otomatik Üretilen Reklam Kreatifleri
-              </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Piertur kurumsal master şablonları ile 3 adet yüksek kaliteli reklam görseliniz hazırlandı.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setCurrentStep(3)}
-              className="border border-slate-300 text-slate-700 hover:bg-slate-100 px-4 py-2 rounded-xl text-xs font-bold transition-all"
-            >
-              Bilgileri Düzenle
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8">
-            {generatedVariants.map((variant, idx) => (
-              <div
-                key={variant.id}
-                className="bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden shadow-lg hover:shadow-2xl transition-all flex flex-col justify-between group"
-              >
-                <div className="relative aspect-[9/16] bg-slate-900 overflow-hidden">
-                  <img
-                    src={variant.thumbnail}
-                    alt={variant.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                  />
-                  <div className="absolute top-3 left-3 bg-[#082E63]/90 text-[#FFB21C] text-xs font-extrabold px-3 py-1 rounded-full border border-blue-400/40">
-                    Variant {idx + 1}: {variant.name.split('-')[1]?.trim()}
-                  </div>
-                </div>
-
-                <div className="p-5 flex flex-col justify-between flex-1">
-                  <div>
-                    <h3 className="font-extrabold text-[#082E63] text-base">{variant.name}</h3>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {idx === 0 && 'Dengeli fiyat kartı, çıkış şehirleri ve avantaj ikonları.'}
-                      {idx === 1 && 'Fotoğraf ağırlıklı lüks travel magazine/editorial tasarımı.'}
-                      {idx === 2 && 'Son dakika fırsat rozeti, acil teklif ve kırmızı vurgular.'}
-                    </p>
-                  </div>
-
-                  <div className="mt-6 space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => handleSelectVariant(variant)}
-                      className="w-full bg-[#082E63] hover:bg-[#0B63CE] text-white py-3 rounded-xl font-extrabold text-xs shadow-md flex items-center justify-center space-x-2 transition-all"
-                    >
-                      <Edit3 className="w-4 h-4 text-[#FFB21C]" />
-                      <span>Bu Tasarımı Kullan ve İncele</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/studio/${variant.id}?autoDownload=true`)}
-                      className="w-full bg-slate-200 hover:bg-slate-300 text-slate-800 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 transition-all"
-                    >
-                      <Download className="w-4 h-4 text-[#082E63]" />
-                      <span>Direkt Yüksek Kalite İndir</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       )}

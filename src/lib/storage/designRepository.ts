@@ -3,6 +3,7 @@ import { defaultCampaignData } from '../validation/campaignSchema';
 import { generateAllVariants } from '../templates/variantGenerator';
 
 const STORAGE_KEY = 'piertur_creative_designs_v2';
+const GEN_STORAGE_KEY = 'piertur_creative_generations_v1';
 
 export const initialMockDesigns: DesignModel[] = generateAllVariants(defaultCampaignData as CampaignInfo);
 
@@ -78,5 +79,43 @@ export class DesignRepository {
 
     this.save(duplicated);
     return duplicated;
+  }
+
+  public static saveGenerationGroup(generationId: string, designs: DesignModel[]): void {
+    if (typeof window === 'undefined') return;
+
+    try {
+      designs.forEach((d) => this.save(d));
+
+      const storedGens = localStorage.getItem(GEN_STORAGE_KEY);
+      const gensMap = storedGens ? JSON.parse(storedGens) : {};
+      gensMap[generationId] = designs.map((d) => d.id);
+      localStorage.setItem(GEN_STORAGE_KEY, JSON.stringify(gensMap));
+    } catch (e) {
+      console.error('Failed to save generation group', e);
+    }
+  }
+
+  public static getGenerationGroup(generationId: string): DesignModel[] {
+    const all = this.getAll();
+
+    if (typeof window !== 'undefined') {
+      try {
+        const storedGens = localStorage.getItem(GEN_STORAGE_KEY);
+        if (storedGens) {
+          const gensMap = JSON.parse(storedGens);
+          const ids: string[] = gensMap[generationId];
+          if (ids && ids.length > 0) {
+            const found = ids.map((id) => all.find((d) => d.id === id)).filter(Boolean) as DesignModel[];
+            if (found.length > 0) return found;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to read generation group', e);
+      }
+    }
+
+    // Fallback to initial 3 variants
+    return all.slice(0, 3);
   }
 }
