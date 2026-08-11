@@ -8,18 +8,122 @@ import { DesignRepository } from '@/lib/storage/designRepository';
 import { LargeStoryPreview } from '@/components/preview/LargeStoryPreview';
 import { VideoMotionModal } from '@/components/studio/VideoMotionModal';
 import { DesignModel } from '@/types';
-import { Edit3, Download, Film, Sparkles, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { Edit3, Download, Film, Sparkles, CheckCircle2, ArrowLeft, RefreshCw, Bot } from 'lucide-react';
+import { AIGenerationLoadingModal } from '@/components/wizard/AIGenerationLoadingModal';
 
 export default function GeneratedDesignsPage() {
   const params = useParams();
   const router = useRouter();
   const generationId = params?.generationId as string;
 
-  const [designs] = useState<DesignModel[]>(() => {
+  const [designs, setDesigns] = useState<DesignModel[]>(() => {
     return DesignRepository.getGenerationGroup(generationId);
   });
 
   const [videoModalOpen, setVideoModalOpen] = useState<boolean>(false);
+  const [isRegenerating, setIsRegenerating] = useState<boolean>(false);
+  const [statusNotice, setStatusNotice] = useState<string | null>(null);
+
+  // Single Variant Regeneration handler
+  const handleRegenerateVariant = async (variant: DesignModel, index: number) => {
+    if (isRegenerating) return;
+    setIsRegenerating(true);
+    setStatusNotice(null);
+
+    try {
+      const res = await fetch('/api/ai/generate-creative', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          variant: variant.variantType,
+          payload: {
+            campaignTitle: variant.campaignData.title,
+            subtitle: variant.campaignData.subtitle,
+            hotelName: variant.campaignData.hotelName,
+            nights: variant.campaignData.nights,
+            days: variant.campaignData.days,
+            boardType: variant.campaignData.boardType,
+            price: variant.campaignData.price,
+            currency: variant.campaignData.currency,
+            pricePrefix: variant.campaignData.pricePrefix,
+            priceSuffix: variant.campaignData.priceSuffix,
+            departureCities: variant.campaignData.departureCities,
+            benefits: variant.campaignData.tags,
+            campaignBadge: variant.campaignData.badgeText,
+            cta: variant.campaignData.ctaText,
+            website: variant.campaignData.ctaUrl,
+            uploadedImage: variant.campaignData.backgroundImageUrl,
+          },
+        }),
+      });
+
+      const json = await res.json();
+      if (json.fallback) {
+        setStatusNotice('AI servisine ulaşılamadı. Kurumsal şablon kullanılarak tasarım güncellendi.');
+      }
+
+      if (json.variant) {
+        const updated = [...designs];
+        updated[index] = json.variant;
+        setDesigns(updated);
+        DesignRepository.saveGenerationGroup(generationId, updated);
+      }
+    } catch (e) {
+      console.error('Variant Regeneration error', e);
+      setStatusNotice('Tasarım oluşturulamadı. Lütfen tekrar deneyin.');
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  // Regenerate All 3 Variants
+  const handleRegenerateAll = async () => {
+    if (isRegenerating || designs.length === 0) return;
+    setIsRegenerating(true);
+    setStatusNotice(null);
+
+    const ref = designs[0];
+    try {
+      const res = await fetch('/api/ai/generate-creative', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payload: {
+            campaignTitle: ref.campaignData.title,
+            subtitle: ref.campaignData.subtitle,
+            hotelName: ref.campaignData.hotelName,
+            nights: ref.campaignData.nights,
+            days: ref.campaignData.days,
+            boardType: ref.campaignData.boardType,
+            price: ref.campaignData.price,
+            currency: ref.campaignData.currency,
+            pricePrefix: ref.campaignData.pricePrefix,
+            priceSuffix: ref.campaignData.priceSuffix,
+            departureCities: ref.campaignData.departureCities,
+            benefits: ref.campaignData.tags,
+            campaignBadge: ref.campaignData.badgeText,
+            cta: ref.campaignData.ctaText,
+            website: ref.campaignData.ctaUrl,
+            uploadedImage: ref.campaignData.backgroundImageUrl,
+          },
+        }),
+      });
+
+      const json = await res.json();
+      if (json.fallback) {
+        setStatusNotice('AI servisine ulaşılamadı. Kurumsal şablonlar kullanılarak üretildi.');
+      }
+      if (json.variants) {
+        setDesigns(json.variants);
+        DesignRepository.saveGenerationGroup(generationId, json.variants);
+      }
+    } catch (e) {
+      console.error('Regenerate all error', e);
+      setStatusNotice('Tasarım oluşturulamadı. Lütfen tekrar deneyin.');
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
 
   // High Resolution PNG Export helper
   const handleExportPNG = (design: DesignModel) => {
@@ -134,45 +238,79 @@ export default function GeneratedDesignsPage() {
       <div className="flex-1 flex flex-col min-w-0">
         <Header
           title="Tasarımlarınız Hazır"
-          subtitle="Kampanya bilgileriniz kullanılarak 3 farklı Piertur kreatifi oluşturuldu."
+          subtitle="OpenAI ve Piertur kurumsal motoru ile 3 farklı reklam kreatifi üretildi."
           showNewButton={true}
         />
 
+        <AIGenerationLoadingModal isOpen={isRegenerating} />
+
         <main className="p-8 flex-1">
-          {/* Top Info Banner */}
+          {/* Status Notice if Fallback or Error */}
+          {statusNotice && (
+            <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold flex items-center justify-between">
+              <span>{statusNotice}</span>
+              <button
+                type="button"
+                onClick={() => setStatusNotice(null)}
+                className="text-slate-500 hover:text-black font-bold text-xs"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Top Info Banner with Regenerate All 3 Button */}
           <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs mb-8 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center space-x-3">
               <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="text-lg font-extrabold text-[#082E63]">
-                  3 Kurumsal Reklam Kreatifiniz Tamamlandı
-                </h2>
+                <div className="flex items-center space-x-2">
+                  <h2 className="text-lg font-extrabold text-[#082E63]">
+                    3 AI Reklam Kreatifiniz Tamamlandı
+                  </h2>
+                  <span className="text-[10px] font-extrabold bg-purple-100 text-purple-900 px-2 py-0.5 rounded-full border border-purple-300 flex items-center gap-1">
+                    <Bot className="w-3 h-3 text-purple-600" />
+                    <span>OpenAI Hybrid</span>
+                  </span>
+                </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Tasarımı indirmek için &quot;İndir&quot;, son düzenlemeler için &quot;Düzenle&quot; veya &quot;Bu Tasarımı Kullan&quot; butonuna basın.
+                  Tasarımı indirmek için &quot;İndir&quot;, yeniden üretmek için &quot;Yeniden Üret&quot;, son düzenlemeler için &quot;Düzenle&quot; butonuna basın.
                 </p>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => router.push('/wizard')}
-              className="flex items-center space-x-2 border border-slate-300 hover:bg-slate-100 text-slate-700 px-5 py-2.5 rounded-xl font-bold text-xs transition-all"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Yeni Bilgiler Gir</span>
-            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                type="button"
+                onClick={handleRegenerateAll}
+                disabled={isRegenerating}
+                className="flex items-center space-x-2 bg-gradient-to-r from-purple-700 to-[#082E63] hover:brightness-110 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all disabled:opacity-50"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-[#FFB21C]" />
+                <span>3 Tasarımı Yeniden Üret</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push('/wizard')}
+                className="flex items-center space-x-2 border border-slate-300 hover:bg-slate-100 text-slate-700 px-4 py-2.5 rounded-xl font-bold text-xs transition-all"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Yeni Bilgiler Gir</span>
+              </button>
+            </div>
           </div>
 
-          {/* 3 Large Previews Side-by-Side Grid (Desktop 3 Columns) */}
+          {/* 3 Large Previews Side-by-Side Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
             {designs.map((design, idx) => (
               <div
                 key={design.id}
                 className="bg-white rounded-3xl border border-slate-200 p-6 shadow-md hover:shadow-xl transition-all flex flex-col justify-between"
               >
-                {/* Variant Header Title */}
+                {/* Variant Header Title + AI Badge */}
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-2">
                     <Sparkles className="w-4 h-4 text-[#FFB21C]" />
@@ -180,12 +318,18 @@ export default function GeneratedDesignsPage() {
                       {getVariantTitle(idx)}
                     </h3>
                   </div>
-                  <span className="text-[11px] font-bold text-[#0B63CE] bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200">
-                    Story (1080x1920)
-                  </span>
+                  <div className="flex items-center space-x-1.5">
+                    <span className="text-[10px] font-extrabold bg-purple-100 text-purple-900 px-2 py-0.5 rounded-full border border-purple-300 flex items-center gap-1">
+                      <Bot className="w-3 h-3 text-purple-600" />
+                      <span>AI Badge</span>
+                    </span>
+                    <span className="text-[10px] font-bold text-[#0B63CE] bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                      Story
+                    </span>
+                  </div>
                 </div>
 
-                {/* Large 360px Story Preview Canvas */}
+                {/* Large 340px Story Preview Canvas */}
                 <div className="py-2">
                   <LargeStoryPreview canvasData={design.canvasData} name={design.name} width={340} />
                 </div>
@@ -201,35 +345,46 @@ export default function GeneratedDesignsPage() {
                     <span>BU TASARIMI KULLAN</span>
                   </button>
 
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-4 gap-1.5">
                     <button
                       type="button"
                       onClick={() => handleExportPNG(design)}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-bold text-[11px] flex items-center justify-center space-x-1 transition-all shadow-xs"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-bold text-[10px] flex items-center justify-center space-x-1 transition-all shadow-xs"
                       title="Direkt Full Resolution PNG İndir"
                     >
-                      <Download className="w-3.5 h-3.5" />
+                      <Download className="w-3 h-3" />
                       <span>İNDİR</span>
                     </button>
 
                     <button
                       type="button"
+                      onClick={() => handleRegenerateVariant(design, idx)}
+                      disabled={isRegenerating}
+                      className="bg-purple-700 hover:bg-purple-800 text-white py-2.5 rounded-xl font-bold text-[10px] flex items-center justify-center space-x-1 transition-all disabled:opacity-50"
+                      title="Yalnızca Bu Variantı Yapay Zeka ile Yeniden Üret"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>YENİDEN</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => router.push(`/studio/${design.id}`)}
-                      className="bg-slate-800 hover:bg-black text-white py-2.5 rounded-xl font-bold text-[11px] flex items-center justify-center space-x-1 transition-all"
+                      className="bg-slate-800 hover:bg-black text-white py-2.5 rounded-xl font-bold text-[10px] flex items-center justify-center space-x-1 transition-all"
                       title="Creative Studio'da Düzenle"
                     >
-                      <Edit3 className="w-3.5 h-3.5" />
+                      <Edit3 className="w-3 h-3" />
                       <span>DÜZENLE</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setVideoModalOpen(true)}
-                      className="bg-amber-500 hover:bg-amber-600 text-white py-2.5 rounded-xl font-bold text-[11px] flex items-center justify-center space-x-1 transition-all"
+                      className="bg-amber-500 hover:bg-amber-600 text-white py-2.5 rounded-xl font-bold text-[10px] flex items-center justify-center space-x-1 transition-all"
                       title="Video Animasyona Dönüştür"
                     >
-                      <Film className="w-3.5 h-3.5" />
-                      <span>HAKETLENDİR</span>
+                      <Film className="w-3 h-3" />
+                      <span>HAREKET</span>
                     </button>
                   </div>
                 </div>

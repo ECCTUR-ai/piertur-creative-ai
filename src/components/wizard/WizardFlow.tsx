@@ -24,6 +24,7 @@ import { campaignFormSchema, CampaignFormData, defaultCampaignData } from '@/lib
 import { ContentType, FormatType, CampaignInfo } from '@/types';
 import { generateAllVariants } from '@/lib/templates/variantGenerator';
 import { DesignRepository } from '@/lib/storage/designRepository';
+import { AIGenerationLoadingModal } from './AIGenerationLoadingModal';
 
 const CITIES = ['İstanbul', 'Ankara', 'İzmir', 'Bursa', 'Antalya', 'Diğer'];
 const PRESET_TAGS = [
@@ -65,6 +66,7 @@ export const WizardFlow: React.FC = () => {
   const [format, setFormat] = useState<FormatType>('IG_STORY');
   const [selectedPhoto, setSelectedPhoto] = useState<string>(SAMPLE_PHOTOS[0].url);
   const [customTagInput, setCustomTagInput] = useState<string>('');
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
 
   const {
     register,
@@ -132,23 +134,67 @@ export const WizardFlow: React.FC = () => {
     setCurrentStep(4);
   };
 
-  const handleGenerateAllCreatives = (data: CampaignFormData) => {
+  const handleGenerateAllCreatives = async (data: CampaignFormData) => {
+    if (isGenerating) return; // Double-click protection
+    setIsGenerating(true);
+
     const campaignPayload: CampaignInfo = {
       ...data,
       backgroundImageUrl: selectedPhoto,
     };
 
-    const variants = generateAllVariants(campaignPayload);
-    const generationId = 'gen_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    try {
+      const res = await fetch('/api/ai/generate-creative', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payload: {
+            campaignType: contentType,
+            campaignTitle: data.title,
+            subtitle: data.subtitle,
+            hotelName: data.hotelName,
+            nights: data.nights,
+            days: data.days,
+            boardType: data.boardType,
+            price: data.price,
+            currency: data.currency,
+            pricePrefix: data.pricePrefix,
+            priceSuffix: data.priceSuffix,
+            departureCities: data.departureCities,
+            benefits: data.tags,
+            campaignBadge: data.badgeText,
+            cta: data.ctaText,
+            website: data.ctaUrl,
+            uploadedImage: selectedPhoto,
+          },
+        }),
+      });
 
-    DesignRepository.saveGenerationGroup(generationId, variants);
+      const json = await res.json();
+      const variants = json.variants || generateAllVariants(campaignPayload);
+      const generationId = 'gen_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
 
-    // Route directly to Generated Designs page
-    router.push(`/designs/generated/${generationId}`);
+      DesignRepository.saveGenerationGroup(generationId, variants);
+
+      setTimeout(() => {
+        setIsGenerating(false);
+        router.push(`/designs/generated/${generationId}`);
+      }, 1200);
+    } catch (e) {
+      console.error('AI Generation API Call Failed, using local fallback engine', e);
+      const fallbackVariants = generateAllVariants(campaignPayload);
+      const generationId = 'gen_fb_' + Date.now();
+      DesignRepository.saveGenerationGroup(generationId, fallbackVariants);
+      setIsGenerating(false);
+      router.push(`/designs/generated/${generationId}`);
+    }
   };
 
   return (
     <div className="max-w-5xl mx-auto py-6 px-4">
+      {/* AI Loading Modal */}
+      <AIGenerationLoadingModal isOpen={isGenerating} />
+
       {/* Wizard Progress Indicator */}
       <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs mb-8">
         <div className="flex items-center justify-between">
@@ -647,18 +693,18 @@ export const WizardFlow: React.FC = () => {
         </form>
       )}
 
-      {/* STEP 4: MEDIA SELECTION & TASARIMLARI OLUŞTUR */}
+      {/* STEP 4: MEDIA SELECTION & AI GENERATION */}
       {currentStep === 4 && (
         <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between mb-1">
-            <h2 className="text-xl font-extrabold text-[#082E63]">Adım 4: Arka Plan Fotoğrafı Seçin</h2>
+            <h2 className="text-xl font-extrabold text-[#082E63]">Adım 4: Arka Plan Fotoğrafı & AI Üretim</h2>
             <div className="flex items-center gap-2 bg-purple-100 text-purple-900 border border-purple-300 px-3 py-1 rounded-full text-xs font-bold">
-              <Wand2 className="w-3.5 h-3.5 text-purple-600" />
-              <span>Akıllı Fotoğraf Motoru</span>
+              <Wand2 className="w-3.5 h-3.5 text-purple-600 animate-spin" />
+              <span>OpenAI Image Generation</span>
             </div>
           </div>
           <p className="text-xs text-slate-500 mb-8">
-            Fotoğraf otomatik subject-safe crop ve localized vignette karartması ile yerleşir.
+            Yüklediğiniz referans fotoğraf OpenAI yapay zekası ve Piertur marka diliyle harmanlanacak.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -740,11 +786,12 @@ export const WizardFlow: React.FC = () => {
 
             <button
               type="button"
+              disabled={isGenerating}
               onClick={handleSubmit(handleGenerateAllCreatives)}
-              className="flex items-center space-x-3 bg-gradient-to-r from-[#082E63] to-[#E31C24] hover:brightness-110 text-white px-9 py-4 rounded-xl font-extrabold text-sm shadow-xl transition-all transform hover:scale-105"
+              className="flex items-center space-x-3 bg-gradient-to-r from-[#082E63] via-[#0B63CE] to-[#E31C24] hover:brightness-110 text-white px-9 py-4 rounded-xl font-extrabold text-sm shadow-xl transition-all transform hover:scale-105 disabled:opacity-50"
             >
-              <Sparkles className="w-5 h-5 text-[#FFB21C]" />
-              <span>TASARIMLARI OLUŞTUR</span>
+              <Sparkles className="w-5 h-5 text-[#FFB21C] animate-pulse" />
+              <span>✨ AI İLE TASARIMLARI OLUŞTUR</span>
             </button>
           </div>
         </div>
