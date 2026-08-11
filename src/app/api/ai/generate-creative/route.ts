@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
         image: imageFile,
         prompt: promptText,
         n: 1,
-        size: '1024x1024',
+        size: '1024x1536',
       });
 
       const durationMs = Date.now() - startTime;

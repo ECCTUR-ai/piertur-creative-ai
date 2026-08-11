@@ -26,7 +26,9 @@ export interface CreativePayload {
 
 export function buildPriceHeroPrompt(payload: CreativePayload): string {
   return `
-Preserve the actual destination, mountain geometry, ski slopes, buildings, chairlifts and general photographic identity of the supplied image. Transform it into an agency-grade premium Turkish travel advertising art direction. Do not replace the location (${payload.campaignTitle}). Do not invent another hotel (${payload.hotelName || 'Beceren Otel'}). Do not render logos or final commercial text. Create graphic depth, navy (#082E63)/yellow (#FFB21C)/red (#E31C24) advertising accents and clean safe zones for deterministic typography overlays.
+Preserve the actual destination, mountain geometry, ski slopes, buildings, chairlifts and general photographic identity of the supplied image (${payload.campaignTitle}).
+Transform it into: premium Turkish tour operator advertising, agency-grade social media campaign, sophisticated travel editorial composition, full bleed destination photography, layered navy (#082E63) / warm yellow (#FFB21C) / controlled red (#E31C24) graphic accents, subtle diagonal graphic forms, premium depth and lighting, sophisticated negative space, strong visual hierarchy, modern travel advertising.
+CRITICAL INSTRUCTION: Clean areas reserved for real typography. No fake logo. No fake text. No fake prices. No random hotel names.
 `.trim();
 }
 
