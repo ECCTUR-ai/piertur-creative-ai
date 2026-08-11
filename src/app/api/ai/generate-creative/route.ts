@@ -57,7 +57,29 @@ export async function POST(req: NextRequest) {
 
     // Initialize official OpenAI SDK
     const openai = new OpenAI({ apiKey });
-    const model = process.env.OPENAI_IMAGE_MODEL || 'dall-e-3';
+    const model = process.env.OPENAI_IMAGE_MODEL || 'dall-e-2';
+
+    const safeGenerateImage = async (promptStr: string) => {
+      try {
+        return await openai.images.generate({
+          model,
+          prompt: promptStr,
+          n: 1,
+          size: model === 'dall-e-3' ? '1024x1792' : '1024x1024',
+        });
+      } catch (err: unknown) {
+        const errorObj = err as { status?: number; message?: string };
+        if (errorObj?.status === 400 && errorObj?.message?.includes('model')) {
+          return await openai.images.generate({
+            model: 'dall-e-2',
+            prompt: promptStr,
+            n: 1,
+            size: '1024x1024',
+          });
+        }
+        throw err;
+      }
+    };
 
     // If single variant requested for regeneration
     if (requestedVariant) {
@@ -65,13 +87,7 @@ export async function POST(req: NextRequest) {
       if (requestedVariant === 'DESTINATION_FOCUSED') prompt = buildDestinationHeroPrompt(payload);
       if (requestedVariant === 'DEAL_FOCUSED') prompt = buildCampaignHeroPrompt(payload);
 
-      const response = await openai.images.generate({
-        model,
-        prompt,
-        n: 1,
-        size: '1024x1792', // Closest to 9:16 vertical story
-        quality: 'standard',
-      });
+      const response = await safeGenerateImage(prompt);
 
       const imageUrl = response?.data?.[0]?.url || payload.uploadedImage;
       const updatedCampaign = { ...campaignInfo, backgroundImageUrl: imageUrl };
@@ -92,9 +108,9 @@ export async function POST(req: NextRequest) {
 
     // Call OpenAI API for the 3 variants concurrently
     const [resPrice, resDest, resDeal] = await Promise.allSettled([
-      openai.images.generate({ model, prompt: promptPrice, n: 1, size: '1024x1792', quality: 'standard' }),
-      openai.images.generate({ model, prompt: promptDest, n: 1, size: '1024x1792', quality: 'standard' }),
-      openai.images.generate({ model, prompt: promptDeal, n: 1, size: '1024x1792', quality: 'standard' }),
+      safeGenerateImage(promptPrice),
+      safeGenerateImage(promptDest),
+      safeGenerateImage(promptDeal),
     ]);
 
     const urlPrice = resPrice.status === 'fulfilled' ? resPrice.value?.data?.[0]?.url : undefined;
