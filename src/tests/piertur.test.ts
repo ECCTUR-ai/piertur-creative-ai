@@ -6,7 +6,7 @@ import { generateCyprusPriceFocusedCanvas } from '../lib/templates/cyprus-price-
 import { buildPriceHeroPrompt } from '../lib/ai/creativePromptBuilder';
 import { DesignRepository } from '../lib/storage/designRepository';
 
-describe('Piertur True Image Input OpenAI Integration Tests', () => {
+describe('Piertur Strict OpenAI Image Edit API (/v1/images/edits) Tests', () => {
   it('should validate Uludağ demo campaign form correctly using Zod schema', () => {
     const validResult = campaignFormSchema.safeParse(defaultCampaignData);
     expect(validResult.success).toBe(true);
@@ -46,24 +46,28 @@ describe('Piertur True Image Input OpenAI Integration Tests', () => {
     expect(priceLayer?.locked).toBe(true);
   });
 
-  it('should maintain generation group storage with inputImageUsed and inputImageMethod tracking', () => {
+  it('should maintain generation group storage with endpoint /v1/images/edits and inputImageBytes tracking', () => {
     const variants = generateAllVariants(defaultCampaignData).map((v) => ({
       ...v,
       generationSource: 'openai' as const,
       model: 'gpt-image-2',
+      endpoint: '/v1/images/edits',
       aiSuccess: true,
       fallbackReason: null,
       inputImageUsed: true,
-      inputImageMethod: 'openai.images.edit (binary image buffer passed)',
+      inputImageMethod: 'openai.images.edit',
+      inputImageBytes: 348512,
+      durationMs: 14200,
     }));
 
-    const genId = 'gen_test_true_image_200';
+    const genId = 'gen_test_edits_endpoint_300';
     DesignRepository.saveGenerationGroup(genId, variants);
 
     const loaded = DesignRepository.getGenerationGroup(genId);
     expect(loaded.length).toBe(3);
     expect(loaded[0].generationSource).toBe('openai');
-    expect(loaded[0].inputImageUsed).toBe(true);
-    expect(loaded[0].inputImageMethod).toContain('openai.images.edit');
+    expect(loaded[0].endpoint).toBe('/v1/images/edits');
+    expect(loaded[0].inputImageMethod).toBe('openai.images.edit');
+    expect(loaded[0].inputImageBytes).toBe(348512);
   });
 });

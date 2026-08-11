@@ -9,17 +9,19 @@ import {
 import { generateAllVariants } from '@/lib/templates/variantGenerator';
 import { CampaignInfo, DesignModel } from '@/types';
 
-async function imageInputToFile(imageInputStr: string) {
+async function parseImageInputToBuffer(imageInputStr: string): Promise<{ buffer: Buffer; bytes: number } | null> {
+  if (!imageInputStr || imageInputStr.trim() === '') return null;
+
   if (imageInputStr.startsWith('data:image/')) {
     const base64Data = imageInputStr.split(',')[1] || imageInputStr;
     const buffer = Buffer.from(base64Data, 'base64');
-    return await toFile(buffer, 'input.png', { type: 'image/png' });
+    return { buffer, bytes: buffer.length };
   }
   if (imageInputStr.startsWith('http://') || imageInputStr.startsWith('https://')) {
     const response = await fetch(imageInputStr);
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    return await toFile(buffer, 'input.png', { type: 'image/png' });
+    return { buffer, bytes: buffer.length };
   }
   return null;
 }
@@ -72,8 +74,11 @@ export async function POST(req: NextRequest) {
             aiSuccess: false,
             generationSource: 'failed',
             model: targetModel,
+            endpoint: '/v1/images/edits',
             inputImageUsed: false,
-            inputImageMethod: 'None (API key missing)',
+            inputImageMethod: 'openai.images.edit',
+            inputImageBytes: 0,
+            durationMs: 0,
             fallbackReason: 'OPENAI_API_KEY environment variable is not configured on server.',
             error: 'Strict Test Mode: OPENAI_API_KEY missing.',
           },
@@ -85,10 +90,12 @@ export async function POST(req: NextRequest) {
         ...v,
         generationSource: 'fallback' as const,
         model: 'V2 Master Template Engine',
+        endpoint: 'none',
         aiSuccess: false,
         fallbackReason: 'OPENAI_API_KEY is not configured in server environment.',
         inputImageUsed: false,
         inputImageMethod: 'None (Fallback Master Template)',
+        inputImageBytes: 0,
       }));
 
       return NextResponse.json({
@@ -96,8 +103,10 @@ export async function POST(req: NextRequest) {
         aiSuccess: false,
         generationSource: 'fallback',
         model: 'V2 Master Template Engine',
+        endpoint: 'none',
         inputImageUsed: false,
         inputImageMethod: 'None (Fallback Master Template)',
+        inputImageBytes: 0,
         fallbackReason: 'OPENAI_API_KEY is not configured in server environment.',
         variants: singleVariantOnly ? [fallbackVariants[0]] : fallbackVariants,
       });
@@ -106,52 +115,36 @@ export async function POST(req: NextRequest) {
     // Initialize official OpenAI SDK
     const openai = new OpenAI({ apiKey });
 
-    // Execute True Image Edit or Image Generation
-    const executeImageAI = async (promptText: string) => {
-      let inputImageFile = null;
-      const usedMethod = 'openai.images.generate';
+    // Strict Image Edit execution helper using POST /v1/images/edits via openai.images.edit()
+    const executeStrictImageEdit = async (promptText: string) => {
+      const parsedImage = payload.uploadedImage
+        ? await parseImageInputToBuffer(payload.uploadedImage)
+        : null;
 
-      if (payload.uploadedImage) {
-        try {
-          inputImageFile = await imageInputToFile(payload.uploadedImage);
-        } catch (e) {
-          console.warn('Failed to parse uploaded image into file object:', e);
-        }
+      if (!parsedImage) {
+        throw new Error('Image input payload (uploadedImage) is required for openai.images.edit (/v1/images/edits).');
       }
 
-      if (inputImageFile) {
-        try {
-          // Attempt true binary image-to-image edit API using dall-e-2 (the only model supported by OpenAI Images Edit API)
-          const editRes = await openai.images.edit({
-            model: 'dall-e-2',
-            image: inputImageFile,
-            prompt: promptText,
-            n: 1,
-            size: '1024x1024',
-          });
+      const imageFile = await toFile(parsedImage.buffer, 'reference.png', { type: 'image/png' });
+      const startTime = Date.now();
 
-          return {
-            url: editRes?.data?.[0]?.url,
-            inputImageUsed: true,
-            method: 'openai.images.edit (dall-e-2 binary image buffer passed)',
-          };
-        } catch (err: unknown) {
-          console.warn('openai.images.edit failed, falling back to openai.images.generate with vision reference prompt:', (err as Error)?.message);
-        }
-      }
-
-      // Standard OpenAI Image Generation fallback
-      const genRes = await openai.images.generate({
-        model: targetModel,
-        prompt: promptText + (payload.uploadedImage ? ' Base photo identity: Uludağ ski resort, mountain slopes, snow scenery.' : ''),
+      // Call official SDK openai.images.edit() method mapping to POST /v1/images/edits
+      const editRes = await openai.images.edit({
+        image: imageFile,
+        prompt: promptText,
         n: 1,
-        size: targetModel.includes('dall-e-3') || targetModel.includes('gpt-image') ? '1024x1792' : '1024x1024',
+        size: '1024x1024',
       });
 
+      const durationMs = Date.now() - startTime;
+
       return {
-        url: genRes?.data?.[0]?.url,
-        inputImageUsed: inputImageFile ? true : false,
-        method: usedMethod,
+        url: editRes?.data?.[0]?.url,
+        inputImageUsed: true,
+        inputImageMethod: 'openai.images.edit',
+        endpoint: '/v1/images/edits',
+        inputImageBytes: parsedImage.bytes,
+        durationMs,
       };
     };
 
@@ -163,7 +156,7 @@ export async function POST(req: NextRequest) {
       if (variantType === 'DEAL_FOCUSED') prompt = buildCampaignHeroPrompt(payload);
 
       try {
-        const result = await executeImageAI(prompt);
+        const result = await executeStrictImageEdit(prompt);
         const imageUrl = result.url || payload.uploadedImage;
         const updatedCampaign = { ...campaignInfo, backgroundImageUrl: imageUrl };
         const allVariants = generateAllVariants(updatedCampaign);
@@ -173,10 +166,13 @@ export async function POST(req: NextRequest) {
           ...targetVariant,
           generationSource: 'openai',
           model: targetModel,
+          endpoint: result.endpoint,
           aiSuccess: true,
           fallbackReason: null,
           inputImageUsed: result.inputImageUsed,
-          inputImageMethod: result.method,
+          inputImageMethod: result.inputImageMethod,
+          inputImageBytes: result.inputImageBytes,
+          durationMs: result.durationMs,
         };
 
         return NextResponse.json({
@@ -184,14 +180,18 @@ export async function POST(req: NextRequest) {
           aiSuccess: true,
           generationSource: 'openai',
           model: targetModel,
+          endpoint: result.endpoint,
           inputImageUsed: result.inputImageUsed,
-          inputImageMethod: result.method,
+          inputImageMethod: result.inputImageMethod,
+          inputImageBytes: result.inputImageBytes,
+          durationMs: result.durationMs,
+          fallback: false,
           fallbackReason: null,
           variant: finalVariant,
           variants: [finalVariant],
         });
       } catch (err: unknown) {
-        const errorMsg = (err as Error)?.message || 'OpenAI API call failed';
+        const errorMsg = (err as Error)?.message || 'OpenAI openai.images.edit call failed';
         if (isStrict) {
           return NextResponse.json(
             {
@@ -199,8 +199,12 @@ export async function POST(req: NextRequest) {
               aiSuccess: false,
               generationSource: 'failed',
               model: targetModel,
-              inputImageUsed: false,
-              inputImageMethod: 'None (API Error)',
+              endpoint: '/v1/images/edits',
+              inputImageUsed: true,
+              inputImageMethod: 'openai.images.edit',
+              inputImageBytes: payload.uploadedImage ? payload.uploadedImage.length : 0,
+              durationMs: 0,
+              fallback: false,
               fallbackReason: errorMsg,
               error: errorMsg,
             },
@@ -214,8 +218,12 @@ export async function POST(req: NextRequest) {
           aiSuccess: false,
           generationSource: 'fallback',
           model: targetModel,
-          inputImageUsed: false,
-          inputImageMethod: 'None (Fallback Master Template)',
+          endpoint: '/v1/images/edits',
+          inputImageUsed: true,
+          inputImageMethod: 'openai.images.edit',
+          inputImageBytes: payload.uploadedImage ? payload.uploadedImage.length : 0,
+          durationMs: 0,
+          fallback: true,
           fallbackReason: errorMsg,
           variant: fallbackVariant ? { ...fallbackVariant, generationSource: 'fallback', aiSuccess: false } : null,
           variants: fallbackVariant ? [{ ...fallbackVariant, generationSource: 'fallback', aiSuccess: false }] : [],
@@ -223,16 +231,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Batch 3 Variant Execution
+    // Batch 3 Variant Execution using openai.images.edit
     const promptPrice = buildPriceHeroPrompt(payload);
     const promptDest = buildDestinationHeroPrompt(payload);
     const promptDeal = buildCampaignHeroPrompt(payload);
 
     try {
       const [resPrice, resDest, resDeal] = await Promise.allSettled([
-        executeImageAI(promptPrice),
-        executeImageAI(promptDest),
-        executeImageAI(promptDeal),
+        executeStrictImageEdit(promptPrice),
+        executeStrictImageEdit(promptDest),
+        executeStrictImageEdit(promptDeal),
       ]);
 
       const priceResult = resPrice.status === 'fulfilled' ? resPrice.value : undefined;
@@ -252,10 +260,12 @@ export async function POST(req: NextRequest) {
             aiSuccess: false,
             generationSource: 'failed',
             model: targetModel,
-            inputImageUsed: false,
-            inputImageMethod: 'None (All API calls failed)',
-            fallbackReason: priceFailedReason || destFailedReason || dealFailedReason || 'All 3 OpenAI image calls failed',
-            error: priceFailedReason || destFailedReason || dealFailedReason || 'All 3 OpenAI image calls failed',
+            endpoint: '/v1/images/edits',
+            inputImageUsed: true,
+            inputImageMethod: 'openai.images.edit',
+            fallback: false,
+            fallbackReason: priceFailedReason || destFailedReason || dealFailedReason || 'All openai.images.edit calls failed',
+            error: priceFailedReason || destFailedReason || dealFailedReason || 'All openai.images.edit calls failed',
           },
           { status: 500 }
         );
@@ -264,20 +274,24 @@ export async function POST(req: NextRequest) {
       const baseVariants = generateAllVariants(campaignInfo).map((v, idx) => {
         let isVariantAiSuccess = false;
         let aiUrl: string | undefined = undefined;
-        let usedMethod = 'None';
+        let usedBytes = 0;
+        let usedDuration = 0;
 
         if (idx === 0 && priceResult?.url) {
           isVariantAiSuccess = true;
           aiUrl = priceResult.url;
-          usedMethod = priceResult.method;
+          usedBytes = priceResult.inputImageBytes;
+          usedDuration = priceResult.durationMs;
         } else if (idx === 1 && destResult?.url) {
           isVariantAiSuccess = true;
           aiUrl = destResult.url;
-          usedMethod = destResult.method;
+          usedBytes = destResult.inputImageBytes;
+          usedDuration = destResult.durationMs;
         } else if (idx === 2 && dealResult?.url) {
           isVariantAiSuccess = true;
           aiUrl = dealResult.url;
-          usedMethod = dealResult.method;
+          usedBytes = dealResult.inputImageBytes;
+          usedDuration = dealResult.durationMs;
         }
 
         const variantObj = { ...v };
@@ -291,10 +305,13 @@ export async function POST(req: NextRequest) {
           ...variantObj,
           generationSource: (isVariantAiSuccess ? 'openai' : 'fallback') as 'openai' | 'fallback',
           model: targetModel,
+          endpoint: '/v1/images/edits',
           aiSuccess: isVariantAiSuccess,
           fallbackReason: isVariantAiSuccess ? null : priceFailedReason || destFailedReason || dealFailedReason,
-          inputImageUsed: isVariantAiSuccess,
-          inputImageMethod: usedMethod,
+          inputImageUsed: true,
+          inputImageMethod: 'openai.images.edit',
+          inputImageBytes: usedBytes,
+          durationMs: usedDuration,
         };
       });
 
@@ -303,14 +320,18 @@ export async function POST(req: NextRequest) {
         aiSuccess: anyAiSuccess,
         generationSource: anyAiSuccess ? 'openai' : 'fallback',
         model: targetModel,
-        inputImageUsed: priceResult?.inputImageUsed || false,
-        inputImageMethod: priceResult?.method || 'None',
+        endpoint: '/v1/images/edits',
+        inputImageUsed: true,
+        inputImageMethod: 'openai.images.edit',
+        inputImageBytes: priceResult?.inputImageBytes || 0,
+        durationMs: priceResult?.durationMs || 0,
+        fallback: !anyAiSuccess,
         fallbackReason: anyAiSuccess ? null : priceFailedReason || destFailedReason || dealFailedReason,
-        message: anyAiSuccess ? 'OpenAI AI Kreatifler üretildi.' : 'Fallback Kurumsal Şablonlar üretildi.',
+        message: anyAiSuccess ? 'OpenAI openai.images.edit Kreatifler üretildi.' : 'Fallback Kurumsal Şablonlar üretildi.',
         variants: baseVariants,
       });
     } catch (err: unknown) {
-      const errorMsg = (err as Error)?.message || 'OpenAI API execution error';
+      const errorMsg = (err as Error)?.message || 'OpenAI openai.images.edit execution error';
       if (isStrict) {
         return NextResponse.json(
           {
@@ -318,8 +339,10 @@ export async function POST(req: NextRequest) {
             aiSuccess: false,
             generationSource: 'failed',
             model: targetModel,
-            inputImageUsed: false,
-            inputImageMethod: 'None (API Exception)',
+            endpoint: '/v1/images/edits',
+            inputImageUsed: true,
+            inputImageMethod: 'openai.images.edit',
+            fallback: false,
             fallbackReason: errorMsg,
             error: errorMsg,
           },
@@ -331,10 +354,11 @@ export async function POST(req: NextRequest) {
         ...v,
         generationSource: 'fallback' as const,
         model: targetModel,
+        endpoint: '/v1/images/edits',
         aiSuccess: false,
         fallbackReason: errorMsg,
-        inputImageUsed: false,
-        inputImageMethod: 'None (Fallback Master Template)',
+        inputImageUsed: true,
+        inputImageMethod: 'openai.images.edit',
       }));
 
       return NextResponse.json({
@@ -342,8 +366,10 @@ export async function POST(req: NextRequest) {
         aiSuccess: false,
         generationSource: 'fallback',
         model: targetModel,
-        inputImageUsed: false,
-        inputImageMethod: 'None (Fallback Master Template)',
+        endpoint: '/v1/images/edits',
+        inputImageUsed: true,
+        inputImageMethod: 'openai.images.edit',
+        fallback: true,
         fallbackReason: errorMsg,
         variants: fallbackVariants,
       });
@@ -355,8 +381,9 @@ export async function POST(req: NextRequest) {
         success: false,
         aiSuccess: false,
         generationSource: 'failed',
-        inputImageUsed: false,
-        inputImageMethod: 'None (Server Error)',
+        endpoint: '/v1/images/edits',
+        inputImageUsed: true,
+        inputImageMethod: 'openai.images.edit',
         error: errorMsg,
       },
       { status: 500 }

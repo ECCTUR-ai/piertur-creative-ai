@@ -81,10 +81,13 @@ export interface DesignModel {
   variantType?: 'PRICE_FOCUSED' | 'DESTINATION_FOCUSED' | 'DEAL_FOCUSED';
   generationSource?: 'openai' | 'fallback';
   model?: string;
+  endpoint?: string;
   aiSuccess?: boolean;
   fallbackReason?: string | null;
   inputImageUsed?: boolean;
   inputImageMethod?: string;
+  inputImageBytes?: number;
+  durationMs?: number;
 }
 
 export interface TemplateModel {

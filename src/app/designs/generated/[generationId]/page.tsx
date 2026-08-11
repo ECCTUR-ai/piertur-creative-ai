@@ -343,16 +343,16 @@ export default function GeneratedDesignsPage() {
                           {getVariantTitle(idx)}
                         </h3>
                       </div>
-                      {design.inputImageMethod && (
+                      {design.endpoint && (
                         <p className="text-[10px] text-slate-400 font-mono">
-                          Input Method: {design.inputImageMethod}
+                          Endpoint: {design.endpoint} {design.inputImageBytes ? `(${Math.round(design.inputImageBytes / 1024)} KB)` : ''}
                         </p>
                       )}
                     </div>
                     <div className="flex items-center space-x-1.5">
                       {design.inputImageUsed && (
                         <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full border bg-emerald-100 text-emerald-900 border-emerald-300 flex items-center gap-1">
-                          <span>📸 Image Input: EVET</span>
+                          <span>📸 Edit Input: EVET</span>
                         </span>
                       )}
                       <span
