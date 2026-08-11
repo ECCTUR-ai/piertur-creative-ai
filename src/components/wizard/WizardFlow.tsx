@@ -148,6 +148,8 @@ export const WizardFlow: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          singleVariantOnly: true,
+          variant: 'PRICE_FOCUSED',
           payload: {
             campaignType: contentType,
             campaignTitle: data.title,
