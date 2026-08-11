@@ -121,8 +121,9 @@ export async function POST(req: NextRequest) {
 
       if (inputImageFile) {
         try {
-          // Attempt true binary image-to-image edit API
+          // Attempt true binary image-to-image edit API using dall-e-2 (the only model supported by OpenAI Images Edit API)
           const editRes = await openai.images.edit({
+            model: 'dall-e-2',
             image: inputImageFile,
             prompt: promptText,
             n: 1,
@@ -132,7 +133,7 @@ export async function POST(req: NextRequest) {
           return {
             url: editRes?.data?.[0]?.url,
             inputImageUsed: true,
-            method: 'openai.images.edit (binary image buffer passed)',
+            method: 'openai.images.edit (dall-e-2 binary image buffer passed)',
           };
         } catch (err: unknown) {
           console.warn('openai.images.edit failed, falling back to openai.images.generate with vision reference prompt:', (err as Error)?.message);
