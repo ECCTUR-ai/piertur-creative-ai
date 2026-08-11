@@ -19,41 +19,44 @@ import {
   LayoutGrid,
   Square,
   Wand2,
+  Download,
+  Edit3,
 } from 'lucide-react';
 import { campaignFormSchema, CampaignFormData, defaultCampaignData } from '@/lib/validation/campaignSchema';
 import { ContentType, FormatType, DesignModel, CampaignInfo } from '@/types';
-import { templatesList } from '@/lib/templates';
+import { generateAllVariants } from '@/lib/templates/variantGenerator';
 import { DesignRepository } from '@/lib/storage/designRepository';
-import { generateId } from '@/lib/utils/formatters';
 
-const CITIES = ['İstanbul', 'Ankara', 'İzmir', 'Adana', 'Antalya', 'Diğer'];
+const CITIES = ['İstanbul', 'Ankara', 'İzmir', 'Bursa', 'Antalya', 'Diğer'];
 const PRESET_TAGS = [
+  'Kayak Pistlerine Yakın',
+  'Yemek İmkanı',
+  'Ulaşım Dahil',
+  'Seyahat Sigortası',
+  '7/24 Destek',
   'Vade Farksız Taksit',
   'Kupon Fırsatı',
   '5★ Otel Seçeneği',
-  'Direkt Uçuş',
   'Erken Rezervasyon',
   'Sınırlı Kontenjan',
-  '7/24 Destek',
-  '%100 Güvenli Rezervasyon',
 ];
 
 const SAMPLE_PHOTOS = [
   {
-    name: 'Kıbrıs Girne Limanı',
-    url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1080&q=80',
+    name: 'Uludağ Kayak Merkezi & Kar',
+    url: 'https://images.unsplash.com/photo-1551524559-8af4e6624178?auto=format&fit=crop&w=1080&q=80',
   },
   {
-    name: 'Akdeniz Sahil Resort',
-    url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1080&q=80',
+    name: 'Kıbrıs Girne Limanı',
+    url: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=1080&q=80',
   },
   {
     name: 'Lüks 5 Yıldızlı Otel',
     url: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=1080&q=80',
   },
   {
-    name: 'Son Dakika Tatil Havuzu',
-    url: 'https://images.unsplash.com/photo-1512100356356-de1b84283e18?auto=format&fit=crop&w=1080&q=80',
+    name: 'Akdeniz Sahil Resort',
+    url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1080&q=80',
   },
 ];
 
@@ -64,7 +67,7 @@ export const WizardFlow: React.FC = () => {
   const [format, setFormat] = useState<FormatType>('IG_STORY');
   const [selectedPhoto, setSelectedPhoto] = useState<string>(SAMPLE_PHOTOS[0].url);
   const [customTagInput, setCustomTagInput] = useState<string>('');
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('template-01-price-focused');
+  const [generatedVariants, setGeneratedVariants] = useState<DesignModel[]>([]);
 
   const {
     register,
@@ -132,36 +135,25 @@ export const WizardFlow: React.FC = () => {
     setCurrentStep(4);
   };
 
-  const handleCompleteWizard = (data: CampaignFormData) => {
-    const selectedTemplate = templatesList.find((t) => t.id === selectedTemplateId) || templatesList[0];
-
+  const handleGenerateAllCreatives = (data: CampaignFormData) => {
     const campaignPayload: CampaignInfo = {
       ...data,
       backgroundImageUrl: selectedPhoto,
     };
 
-    const generatedCanvas = selectedTemplate.generateCanvasData(campaignPayload);
+    const variants = generateAllVariants(campaignPayload);
+    variants.forEach((v) => DesignRepository.save(v));
 
-    const newDesign: DesignModel = {
-      id: generateId(),
-      name: `${data.title} - ${selectedTemplate.name.split(':')[1]?.trim() || 'Story'}`,
-      type: contentType,
-      format,
-      width: format === 'IG_STORY' ? 1080 : format === 'IG_POST' ? 1080 : 1080,
-      height: format === 'IG_STORY' ? 1920 : format === 'IG_POST' ? 1350 : 1080,
-      thumbnail: selectedPhoto,
-      campaignData: campaignPayload,
-      canvasData: generatedCanvas,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    setGeneratedVariants(variants);
+    setCurrentStep(5);
+  };
 
-    DesignRepository.save(newDesign);
-    router.push(`/studio/${newDesign.id}`);
+  const handleSelectVariant = (design: DesignModel) => {
+    router.push(`/studio/${design.id}`);
   };
 
   return (
-    <div className="max-w-5xl mx-auto py-6 px-4">
+    <div className="max-w-6xl mx-auto py-6 px-4">
       {/* Wizard Progress Indicator */}
       <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs mb-8">
         <div className="flex items-center justify-between">
@@ -170,7 +162,7 @@ export const WizardFlow: React.FC = () => {
             { step: 2, title: 'Format' },
             { step: 3, title: 'Kampanya Bilgileri' },
             { step: 4, title: 'Fotoğraf & Medya' },
-            { step: 5, title: 'Şablon Seçimi' },
+            { step: 5, title: 'Otomatik Kreatifler' },
           ].map((item, index, arr) => (
             <React.Fragment key={item.step}>
               <div className="flex items-center space-x-3">
@@ -218,13 +210,13 @@ export const WizardFlow: React.FC = () => {
               {
                 id: 'TUR' as ContentType,
                 title: 'Tur',
-                desc: 'Kıbrıs, Kültür ve Yurt Dışı Paket Turları',
+                desc: 'Uludağ, Kıbrıs, Kültür ve Yurt Dışı Paket Turları',
                 icon: Compass,
               },
               {
                 id: 'OTEL' as ContentType,
                 title: 'Otel',
-                desc: '5★ Resort, Otel Konaklama ve Tatil Paketleri',
+                desc: 'Beceren Otel, Resort ve Lüks Konaklama',
                 icon: Building2,
               },
               {
@@ -236,7 +228,7 @@ export const WizardFlow: React.FC = () => {
               {
                 id: 'KAMPANYA' as ContentType,
                 title: 'Kampanya',
-                desc: 'Erken Rezervasyon, Fırsat ve İndirimler',
+                desc: 'Son Dakika Fırsatı, Erken Rezervasyon',
                 icon: Megaphone,
               },
             ].map((card) => {
@@ -312,7 +304,6 @@ export const WizardFlow: React.FC = () => {
                 size: '1080 x 1920 px',
                 desc: 'Story ve Reels reklamları için tam dikey format',
                 icon: Camera,
-                aspectRatio: 'aspect-[9/16]',
                 badge: 'Önerilen MVP',
               },
               {
@@ -321,7 +312,6 @@ export const WizardFlow: React.FC = () => {
                 size: '1080 x 1350 px',
                 desc: 'Dikey Akış ve Facebook reklam gönderileri',
                 icon: LayoutGrid,
-                aspectRatio: 'aspect-[4/5]',
               },
               {
                 id: 'SQUARE_POST' as FormatType,
@@ -329,7 +319,6 @@ export const WizardFlow: React.FC = () => {
                 size: '1080 x 1080 px',
                 desc: 'Standart kare akış gönderileri',
                 icon: Square,
-                aspectRatio: 'aspect-square',
               },
             ].map((card) => {
               const Icon = card.icon;
@@ -405,7 +394,7 @@ export const WizardFlow: React.FC = () => {
         <form onSubmit={handleSubmit(onSubmitStep3)} className="bg-white rounded-2xl p-8 border border-slate-200 shadow-xs">
           <h2 className="text-xl font-extrabold text-[#082E63]">Adım 3: Kampanya Bilgileri</h2>
           <p className="text-xs text-slate-500 mt-1 mb-8">
-            Kreatif üzerinde yer alacak reklam metinlerini doldurun.
+            Kreatif üzerinde yer alacak kurumsal metin ve fiyat bilgilerini doldurun.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -417,8 +406,8 @@ export const WizardFlow: React.FC = () => {
               <input
                 type="text"
                 {...register('title')}
-                placeholder="Örn: KIBRIS TURLARI"
-                className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#082E63] font-semibold text-[#082E63]"
+                placeholder="Örn: Uludağ Konaklamalı Tur"
+                className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm font-semibold text-[#082E63] focus:outline-none focus:ring-2 focus:ring-[#082E63]"
               />
               {errors.title && (
                 <p className="text-xs text-[#E31C24] font-medium mt-1">{errors.title.message}</p>
@@ -433,64 +422,82 @@ export const WizardFlow: React.FC = () => {
               <input
                 type="text"
                 {...register('subtitle')}
-                placeholder="Örn: Akdeniz'in En Gözde Rotası"
+                placeholder="Örn: Türkiye'nin En Sevilen Kayak Rotası"
                 className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#082E63]"
               />
-              {errors.subtitle && (
-                <p className="text-xs text-[#E31C24] font-medium mt-1">{errors.subtitle.message}</p>
-              )}
+            </div>
+
+            {/* Hotel Name & Board Type */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
+                Otel Adı / Pill Bilgisi
+              </label>
+              <input
+                type="text"
+                {...register('hotelName')}
+                placeholder="Örn: Beceren Otel"
+                className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#082E63]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
+                Pansiyon Tipi
+              </label>
+              <input
+                type="text"
+                {...register('boardType')}
+                placeholder="Örn: Yarım Pansiyon"
+                className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#082E63]"
+              />
+            </div>
+
+            {/* Ribbon Badge Text */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
+                Rozet / Banner Metni
+              </label>
+              <input
+                type="text"
+                {...register('badgeText')}
+                placeholder="Örn: SON DAKİKA FIRSATI"
+                className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm font-bold text-[#E31C24] focus:outline-none focus:ring-2 focus:ring-[#082E63]"
+              />
             </div>
 
             {/* Nights & Days */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
-                  Gece *
-                </label>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-2">Gece *</label>
                 <input
                   type="number"
                   {...register('nights', { valueAsNumber: true })}
                   className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#082E63]"
                 />
-                {errors.nights && (
-                  <p className="text-xs text-[#E31C24] font-medium mt-1">{errors.nights.message}</p>
-                )}
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
-                  Gün *
-                </label>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-2">Gün *</label>
                 <input
                   type="number"
                   {...register('days', { valueAsNumber: true })}
                   className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#082E63]"
                 />
-                {errors.days && (
-                  <p className="text-xs text-[#E31C24] font-medium mt-1">{errors.days.message}</p>
-                )}
               </div>
             </div>
 
             {/* Price & Currency */}
             <div className="grid grid-cols-3 gap-4">
               <div className="col-span-2">
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
-                  Fiyat *
-                </label>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-2">Fiyat *</label>
                 <input
                   type="number"
                   {...register('price', { valueAsNumber: true })}
                   placeholder="25249"
                   className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm font-bold text-[#082E63] focus:outline-none focus:ring-2 focus:ring-[#082E63]"
                 />
-                {errors.price && (
-                  <p className="text-xs text-[#E31C24] font-medium mt-1">{errors.price.message}</p>
-                )}
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
-                  Para Birimi
-                </label>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-2">Para Birimi</label>
                 <select
                   {...register('currency')}
                   className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#082E63]"
@@ -504,9 +511,7 @@ export const WizardFlow: React.FC = () => {
 
             {/* Price Prefix & Suffix */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
-                Fiyat Prefix
-              </label>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">Fiyat Prefix</label>
               <input
                 type="text"
                 {...register('pricePrefix')}
@@ -515,9 +520,7 @@ export const WizardFlow: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
-                Fiyat Suffix
-              </label>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">Fiyat Suffix</label>
               <input
                 type="text"
                 {...register('priceSuffix')}
@@ -551,17 +554,12 @@ export const WizardFlow: React.FC = () => {
                 );
               })}
             </div>
-            {errors.departureCities && (
-              <p className="text-xs text-[#E31C24] font-medium mt-1">
-                {errors.departureCities.message}
-              </p>
-            )}
           </div>
 
           {/* Campaign Advantages Tags */}
           <div className="mt-6">
             <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
-              Kampanya Avantajları (Tag Sistemi)
+              Kampanya Avantajları (İkonlu Tag Sistem)
             </label>
 
             <div className="flex flex-wrap gap-2 mb-3">
@@ -619,14 +617,12 @@ export const WizardFlow: React.FC = () => {
               <input
                 type="text"
                 {...register('ctaText')}
-                placeholder="HEMEN İNCELE"
+                placeholder="HEMEN REZERVASYON YAP"
                 className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm font-bold text-[#E31C24] focus:outline-none focus:ring-2 focus:ring-[#082E63]"
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
-                Hedef URL
-              </label>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">Hedef URL</label>
               <input
                 type="text"
                 {...register('ctaUrl')}
@@ -650,7 +646,7 @@ export const WizardFlow: React.FC = () => {
               type="submit"
               className="flex items-center space-x-2 bg-[#082E63] hover:bg-[#0B63CE] text-white px-8 py-3.5 rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all"
             >
-              <span>Devam Et</span>
+              <span>Fotoğrafa Geç</span>
               <ArrowRight className="w-4 h-4 text-[#FFB21C]" />
             </button>
           </div>
@@ -661,23 +657,20 @@ export const WizardFlow: React.FC = () => {
       {currentStep === 4 && (
         <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between mb-1">
-            <h2 className="text-xl font-extrabold text-[#082E63]">
-              Adım 4: Arka Plan Fotoğrafı Seçin
-            </h2>
+            <h2 className="text-xl font-extrabold text-[#082E63]">Adım 4: Arka Plan Fotoğrafı Seçin</h2>
             <div className="flex items-center gap-2 bg-purple-100 text-purple-900 border border-purple-300 px-3 py-1 rounded-full text-xs font-bold">
               <Wand2 className="w-3.5 h-3.5 text-purple-600" />
-              <span>AI Görsel Oluşturma (Yakında)</span>
+              <span>Akıllı Fotoğraf Motoru</span>
             </div>
           </div>
           <p className="text-xs text-slate-500 mb-8">
-            Bilgisayarınızdan fotoğraf yükleyin veya kütüphaneden seçin.
+            Fotoğraf otomatik subject-safe crop ve localized vignette karartması ile yerleşir.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Upload Area */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
-                Bilgisayardan Yükle (Drag & Drop)
+                Bilgisayardan Yükle
               </label>
               <div className="border-2 border-dashed border-slate-300 hover:border-[#0B63CE] rounded-2xl p-8 text-center bg-slate-50 hover:bg-blue-50/40 transition-all relative cursor-pointer">
                 <input
@@ -691,7 +684,6 @@ export const WizardFlow: React.FC = () => {
                 <p className="text-xs text-slate-500 mt-1">PNG, JPG, WEBP (Max 10MB)</p>
               </div>
 
-              {/* Selected Photo Preview */}
               {selectedPhoto && (
                 <div className="mt-6">
                   <span className="block text-xs font-bold text-slate-700 uppercase mb-2">
@@ -708,7 +700,6 @@ export const WizardFlow: React.FC = () => {
               )}
             </div>
 
-            {/* Sample Library Photos */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
                 Medya Kütüphanesinden Seç
@@ -730,9 +721,7 @@ export const WizardFlow: React.FC = () => {
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-3">
-                      <span className="text-white text-xs font-bold line-clamp-1">
-                        {photo.name}
-                      </span>
+                      <span className="text-white text-xs font-bold line-clamp-1">{photo.name}</span>
                     </div>
                     {selectedPhoto === photo.url && (
                       <div className="absolute top-2 right-2 bg-[#082E63] text-white p-1 rounded-full shadow-md">
@@ -757,89 +746,86 @@ export const WizardFlow: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => setCurrentStep(5)}
-              className="flex items-center space-x-2 bg-[#082E63] hover:bg-[#0B63CE] text-white px-8 py-3.5 rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all"
+              onClick={handleSubmit(handleGenerateAllCreatives)}
+              className="flex items-center space-x-3 bg-gradient-to-r from-[#082E63] to-[#E31C24] hover:brightness-110 text-white px-9 py-4 rounded-xl font-extrabold text-sm shadow-xl transition-all transform hover:scale-105"
             >
-              <span>Şablonlara Geç</span>
-              <ArrowRight className="w-4 h-4 text-[#FFB21C]" />
+              <Sparkles className="w-5 h-5 text-[#FFB21C]" />
+              <span>TASARIMLARI OLUŞTUR</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* STEP 5: TEMPLATE SELECTION */}
+      {/* STEP 5: AUTOMATED 3-VARIANT CREATIVE PREVIEW SCREEN */}
       {currentStep === 5 && (
         <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-xs">
-          <h2 className="text-xl font-extrabold text-[#082E63]">Adım 5: Reklam Şablonunu Seçin</h2>
-          <p className="text-xs text-slate-500 mt-1 mb-8">
-            Şablona tıkladığınızda yazdığınız tüm bilgiler şablon üzerine otomatik yerleşir.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {templatesList.map((tpl) => {
-              const isSelected = selectedTemplateId === tpl.id;
-              return (
-                <div
-                  key={tpl.id}
-                  onClick={() => setSelectedTemplateId(tpl.id)}
-                  className={`cursor-pointer rounded-2xl border-2 overflow-hidden transition-all flex flex-col justify-between hover:shadow-xl ${
-                    isSelected
-                      ? 'border-[#082E63] bg-blue-50/40 ring-4 ring-blue-200'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
-                  }`}
-                >
-                  <div className="relative aspect-[9/16] bg-slate-900 overflow-hidden">
-                    <img
-                      src={tpl.thumbnailUrl}
-                      alt={tpl.name}
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                      <span className="bg-[#082E63]/90 text-white font-bold text-xs px-3 py-1.5 rounded-xl border border-blue-400/40">
-                        {tpl.name}
-                      </span>
-                    </div>
-
-                    {tpl.badge && (
-                      <span className="absolute top-3 left-3 bg-[#FFB21C] text-[#082E63] text-[10px] font-bold px-2.5 py-1 rounded-full shadow-md">
-                        {tpl.badge}
-                      </span>
-                    )}
-
-                    {isSelected && (
-                      <div className="absolute top-3 right-3 bg-[#082E63] text-white p-1.5 rounded-full shadow-lg">
-                        <Check className="w-4 h-4 text-[#FFB21C]" />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-4">
-                    <h3 className="font-extrabold text-[#082E63] text-sm">{tpl.name}</h3>
-                    <p className="text-xs text-slate-500 mt-1">{tpl.tagline}</p>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h2 className="text-2xl font-extrabold text-[#082E63]">
+                Otomatik Üretilen Reklam Kreatifleri
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Piertur kurumsal master şablonları ile 3 adet yüksek kaliteli reklam görseliniz hazırlandı.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCurrentStep(3)}
+              className="border border-slate-300 text-slate-700 hover:bg-slate-100 px-4 py-2 rounded-xl text-xs font-bold transition-all"
+            >
+              Bilgileri Düzenle
+            </button>
           </div>
 
-          <div className="mt-10 flex justify-between">
-            <button
-              type="button"
-              onClick={() => setCurrentStep(4)}
-              className="flex items-center space-x-2 border border-slate-300 text-slate-700 hover:bg-slate-100 px-6 py-3 rounded-xl font-bold text-sm transition-all"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Geri</span>
-            </button>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8">
+            {generatedVariants.map((variant, idx) => (
+              <div
+                key={variant.id}
+                className="bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden shadow-lg hover:shadow-2xl transition-all flex flex-col justify-between group"
+              >
+                <div className="relative aspect-[9/16] bg-slate-900 overflow-hidden">
+                  <img
+                    src={variant.thumbnail}
+                    alt={variant.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                  />
+                  <div className="absolute top-3 left-3 bg-[#082E63]/90 text-[#FFB21C] text-xs font-extrabold px-3 py-1 rounded-full border border-blue-400/40">
+                    Variant {idx + 1}: {variant.name.split('-')[1]?.trim()}
+                  </div>
+                </div>
 
-            <button
-              type="button"
-              onClick={handleSubmit(handleCompleteWizard)}
-              className="flex items-center space-x-3 bg-gradient-to-r from-[#082E63] to-[#0B63CE] hover:brightness-110 text-white px-9 py-4 rounded-xl font-extrabold text-sm shadow-xl transition-all transform hover:scale-105"
-            >
-              <Sparkles className="w-5 h-5 text-[#FFB21C]" />
-              <span>Creative Studio&apos;da Aç ve Düzenle</span>
-            </button>
+                <div className="p-5 flex flex-col justify-between flex-1">
+                  <div>
+                    <h3 className="font-extrabold text-[#082E63] text-base">{variant.name}</h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {idx === 0 && 'Dengeli fiyat kartı, çıkış şehirleri ve avantaj ikonları.'}
+                      {idx === 1 && 'Fotoğraf ağırlıklı lüks travel magazine/editorial tasarımı.'}
+                      {idx === 2 && 'Son dakika fırsat rozeti, acil teklif ve kırmızı vurgular.'}
+                    </p>
+                  </div>
+
+                  <div className="mt-6 space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectVariant(variant)}
+                      className="w-full bg-[#082E63] hover:bg-[#0B63CE] text-white py-3 rounded-xl font-extrabold text-xs shadow-md flex items-center justify-center space-x-2 transition-all"
+                    >
+                      <Edit3 className="w-4 h-4 text-[#FFB21C]" />
+                      <span>Bu Tasarımı Kullan ve İncele</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/studio/${variant.id}?autoDownload=true`)}
+                      className="w-full bg-slate-200 hover:bg-slate-300 text-slate-800 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 transition-all"
+                    >
+                      <Download className="w-4 h-4 text-[#082E63]" />
+                      <span>Direkt Yüksek Kalite İndir</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

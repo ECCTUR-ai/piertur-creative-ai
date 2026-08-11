@@ -1,50 +1,10 @@
 import { DesignModel, CampaignInfo } from '@/types';
 import { defaultCampaignData } from '../validation/campaignSchema';
-import { generateCyprusPriceFocusedCanvas } from '../templates/cyprus-price-focused';
-import { generateCyprusDestinationFocusedCanvas } from '../templates/cyprus-destination-focused';
+import { generateAllVariants } from '../templates/variantGenerator';
 
-const STORAGE_KEY = 'piertur_creative_designs_v1';
+const STORAGE_KEY = 'piertur_creative_designs_v2';
 
-export const initialMockDesigns: DesignModel[] = [
-  {
-    id: 'des_kibris_story_01',
-    name: 'Kıbrıs Turları - Fiyat Odaklı Story',
-    type: 'TUR',
-    format: 'IG_STORY',
-    width: 1080,
-    height: 1920,
-    thumbnail:
-      'https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=300&q=80',
-    campaignData: defaultCampaignData as CampaignInfo,
-    canvasData: generateCyprusPriceFocusedCanvas(defaultCampaignData as CampaignInfo),
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-    updatedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-  },
-  {
-    id: 'des_kibris_dest_02',
-    name: 'Girne Sahil & Otel Kampanyası',
-    type: 'OTEL',
-    format: 'IG_STORY',
-    width: 1080,
-    height: 1920,
-    thumbnail:
-      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=300&q=80',
-    campaignData: {
-      ...defaultCampaignData,
-      title: 'GİRNE OTEL FIRSATLARI',
-      subtitle: 'Denize Sıfır 5 Yıldızlı Lüks Tatil',
-      price: 18450,
-    } as CampaignInfo,
-    canvasData: generateCyprusDestinationFocusedCanvas({
-      ...defaultCampaignData,
-      title: 'GİRNE OTEL FIRSATLARI',
-      subtitle: 'Denize Sıfır 5 Yıldızlı Lüks Tatil',
-      price: 18450,
-    } as CampaignInfo),
-    createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-    updatedAt: new Date(Date.now() - 86400000 * 1).toISOString(),
-  },
-];
+export const initialMockDesigns: DesignModel[] = generateAllVariants(defaultCampaignData as CampaignInfo);
 
 export class DesignRepository {
   public static getAll(): DesignModel[] {

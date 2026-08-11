@@ -14,6 +14,9 @@ export interface FormatConfig {
 export interface CampaignInfo {
   title: string;
   subtitle: string;
+  hotelName?: string;
+  boardType?: string;
+  badgeText?: string;
   nights: number;
   days: number;
   price: number;
@@ -53,7 +56,6 @@ export interface CanvasLayer {
   locked?: boolean;
   visible?: boolean;
   zIndex?: number;
-  // Specific properties for photos/effects
   brightness?: number;
   contrast?: number;
   fit?: 'cover' | 'contain' | 'fill';
@@ -76,6 +78,7 @@ export interface DesignModel {
   canvasData: CanvasData;
   createdAt: string;
   updatedAt: string;
+  variantType?: 'PRICE_FOCUSED' | 'DESTINATION_FOCUSED' | 'DEAL_FOCUSED';
 }
 
 export interface TemplateModel {

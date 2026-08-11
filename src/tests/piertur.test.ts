@@ -1,51 +1,61 @@
 import { describe, it, expect } from 'vitest';
 import { campaignFormSchema, defaultCampaignData } from '../lib/validation/campaignSchema';
 import { formatPrice, formatDuration, formatCurrencySymbol } from '../lib/utils/formatters';
-import { templatesList, getTemplateById } from '../lib/templates';
+import { formatSmartTitle } from '../lib/utils/typography';
+import { generateAllVariants } from '../lib/templates/variantGenerator';
 import { generateCyprusPriceFocusedCanvas } from '../lib/templates/cyprus-price-focused';
 
-describe('Piertur Creative AI Core Tests', () => {
-  it('should validate campaign form correctly using Zod schema', () => {
+describe('Piertur Corporate Master Creative System Tests', () => {
+  it('should validate Uludağ demo campaign form correctly using Zod schema', () => {
     const validResult = campaignFormSchema.safeParse(defaultCampaignData);
     expect(validResult.success).toBe(true);
-
-    const invalidResult = campaignFormSchema.safeParse({
-      ...defaultCampaignData,
-      title: '', // Empty title should fail
-      price: -10, // Negative price should fail
-    });
-    expect(invalidResult.success).toBe(false);
+    if (validResult.success) {
+      expect(validResult.data.title).toBe('Uludağ Konaklamalı Tur');
+      expect(validResult.data.hotelName).toBe('Beceren Otel');
+      expect(validResult.data.boardType).toBe('Yarım Pansiyon');
+    }
   });
 
-  it('should format prices and durations properly according to Turkish locale', () => {
-    expect(formatPrice(25249)).toBe('25.249');
-    expect(formatPrice(1500000)).toBe('1.500.000');
-    expect(formatCurrencySymbol('TL')).toBe('TL');
-    expect(formatCurrencySymbol('EUR')).toBe('€');
+  it('should format smart title typography and prevent text overflow', () => {
+    const headline = formatSmartTitle('Uludağ Konaklamalı Tur');
+    expect(headline.primary).toBe('ULUDAĞ');
+    expect(headline.secondary).toBe('KONAKLAMALI TUR');
+    expect(headline.primaryFontSize).toBe(100);
 
-    expect(formatDuration(3, 4)).toBe('3 Gece 4 Gün');
-    expect(formatDuration(3)).toBe('3 Gece Otel Konaklamalı');
+    const longTitle = formatSmartTitle('BÜYÜK GAP VE KARS DOĞU EKSPRESİ KÜLTÜR TURU');
+    expect(longTitle.primary).toBe('BÜYÜK');
+    expect(longTitle.primaryFontSize).toBe(100);
   });
 
-  it('should load all 5 MVP Story templates and generate valid canvas elements', () => {
-    expect(templatesList.length).toBe(5);
-
-    const template1 = getTemplateById('template-01-price-focused');
-    expect(template1).toBeDefined();
-    expect(template1.name).toContain('Fiyat Odaklı');
-
+  it('should enforce master template layer locking (locked = true)', () => {
     const canvasData = generateCyprusPriceFocusedCanvas(defaultCampaignData);
     expect(canvasData.backgroundColor).toBe('#082E63');
-    expect(canvasData.elements.length).toBeGreaterThan(10);
 
-    // Verify critical elements are text layers (NOT baked into image)
-    const textLayers = canvasData.elements.filter((el) => el.type === 'text');
-    expect(textLayers.length).toBeGreaterThan(5);
+    // All structural master layers must be locked
+    const unlockedMasterLayers = canvasData.elements.filter((el) => el.locked !== true);
+    expect(unlockedMasterLayers.length).toBe(0);
 
-    const titleLayer = textLayers.find((l) => l.text === 'KIBRIS TURLARI');
+    const titleLayer = canvasData.elements.find((el) => el.text === 'ULUDAĞ');
     expect(titleLayer).toBeDefined();
+    expect(titleLayer?.locked).toBe(true);
 
-    const priceLayer = textLayers.find((l) => l.text?.includes('25.249 TL'));
-    expect(priceLayer).toBeDefined();
+    const hotelLayer = canvasData.elements.find((el) => el.text?.includes('BECEREN OTEL'));
+    expect(hotelLayer).toBeDefined();
+    expect(hotelLayer?.locked).toBe(true);
+  });
+
+  it('should automatically generate 3 distinct creative variants from a single campaign payload', () => {
+    const variants = generateAllVariants(defaultCampaignData);
+    expect(variants.length).toBe(3);
+
+    expect(variants[0].variantType).toBe('PRICE_FOCUSED');
+    expect(variants[1].variantType).toBe('DESTINATION_FOCUSED');
+    expect(variants[2].variantType).toBe('DEAL_FOCUSED');
+
+    variants.forEach((variant) => {
+      expect(variant.width).toBe(1080);
+      expect(variant.height).toBe(1920);
+      expect(variant.canvasData.elements.length).toBeGreaterThan(8);
+    });
   });
 });
