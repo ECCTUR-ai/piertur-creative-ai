@@ -130,6 +130,7 @@ export async function POST(req: NextRequest) {
 
       // Call official SDK openai.images.edit() method mapping to POST /v1/images/edits
       const editRes = await openai.images.edit({
+        model: targetModel,
         image: imageFile,
         prompt: promptText,
         n: 1,
