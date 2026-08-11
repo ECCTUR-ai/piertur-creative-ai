@@ -336,13 +336,25 @@ export default function GeneratedDesignsPage() {
                 >
                   {/* Variant Header Title + Explicit AI / Fallback Metadata Badge */}
                   <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-2">
-                      <Sparkles className="w-4 h-4 text-[#FFB21C]" />
-                      <h3 className="font-extrabold text-[#082E63] text-lg">
-                        {getVariantTitle(idx)}
-                      </h3>
+                    <div className="flex flex-col space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <Sparkles className="w-4 h-4 text-[#FFB21C]" />
+                        <h3 className="font-extrabold text-[#082E63] text-lg">
+                          {getVariantTitle(idx)}
+                        </h3>
+                      </div>
+                      {design.inputImageMethod && (
+                        <p className="text-[10px] text-slate-400 font-mono">
+                          Input Method: {design.inputImageMethod}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center space-x-1.5">
+                      {design.inputImageUsed && (
+                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full border bg-emerald-100 text-emerald-900 border-emerald-300 flex items-center gap-1">
+                          <span>📸 Image Input: EVET</span>
+                        </span>
+                      )}
                       <span
                         className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border flex items-center gap-1 ${
                           isAiVariant

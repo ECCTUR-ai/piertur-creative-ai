@@ -21,47 +21,23 @@ export interface CreativePayload {
   website?: string;
   uploadedImage?: string;
   strictMode?: boolean;
+  singleVariantOnly?: boolean;
 }
-
-const BRAND_CONTEXT = `
-Brand Context: Piertur (Premium Turkish Travel Operator & Creative AI Studio).
-Visual Guidelines:
-- Primary Color: Deep Corporate Navy Blue (#082E63)
-- Accent Colors: Warm Sun Yellow (#FFB21C), Crisp White (#FFFFFF), Limited High-Impact Red (#E31C24)
-- Aspect Ratio: 9:16 Vertical Story / Reels Ad Format (1080x1920 px)
-- Art Direction: High-end social media travel advertising artwork, rich layered shapes, smooth lighting, contrast vignette.
-- CRITICAL INSTRUCTION FOR AI IMAGE ENGINE: DO NOT RENDER ANY TEXT, TYPOGRAPHY, LETTERS, OR FAKE BRAND LOGOS. LEAVE CLEAN DESIGNATED GRAPHIC SAFE-ZONES FOR OVERLAY COMPOSITOR.
-`;
 
 export function buildPriceHeroPrompt(payload: CreativePayload): string {
   return `
-Create a high-converting 9:16 social media travel ad background composition for Piertur.
-Destination/Tour Focus: ${payload.campaignTitle} (${payload.hotelName || 'Lüks Otel'})
-Variant: PRICE HERO (Variant A)
-Prominently structure a sleek deep navy card frame in the lower third reserved for price callout overlay.
-Preserve the authentic atmosphere of ${payload.campaignTitle} destination with soft dark readability vignette at top and bottom.
-${BRAND_CONTEXT}
+Preserve the actual destination, mountain geometry, ski slopes, buildings, chairlifts and general photographic identity of the supplied image. Transform it into an agency-grade premium Turkish travel advertising art direction. Do not replace the location (${payload.campaignTitle}). Do not invent another hotel (${payload.hotelName || 'Beceren Otel'}). Do not render logos or final commercial text. Create graphic depth, navy (#082E63)/yellow (#FFB21C)/red (#E31C24) advertising accents and clean safe zones for deterministic typography overlays.
 `.trim();
 }
 
 export function buildDestinationHeroPrompt(payload: CreativePayload): string {
   return `
-Create an editorial travel magazine 9:16 social media ad background composition for Piertur.
-Destination/Tour Focus: ${payload.campaignTitle}
-Variant: DESTINATION HERO (Variant B)
-The background imagery of ${payload.campaignTitle} is dominant, expansive, and breathtaking.
-Minimal dark vignette overlay at bottom, floating subtle luxury frame zone.
-${BRAND_CONTEXT}
+Preserve the natural scenery and photographic identity of the supplied image (${payload.campaignTitle}). Transform it into an editorial travel magazine 9:16 advertisement artwork. Do not render any logos, text, or letters. Create clean typography safe-zones.
 `.trim();
 }
 
 export function buildCampaignHeroPrompt(payload: CreativePayload): string {
   return `
-Create an urgent flash-deal campaign 9:16 social media ad background composition for Piertur.
-Badge Concept: ${payload.campaignBadge || 'SON DAKİKA FIRSATI'}
-Destination/Tour Focus: ${payload.campaignTitle}
-Variant: CAMPAIGN HERO (Variant C)
-Top red ribbon banner frame, bold high-impact red CTA button frame zone at bottom, vibrant gold and deep navy accent geometry.
-${BRAND_CONTEXT}
+Preserve the key photographic subjects of the supplied image (${payload.campaignTitle}). Transform it into an urgent flash-deal campaign advertisement background with bold red and yellow accent geometry. Do not render logos or typography.
 `.trim();
 }

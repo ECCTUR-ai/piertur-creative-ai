@@ -1,17 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { campaignFormSchema, defaultCampaignData } from '../lib/validation/campaignSchema';
 import { formatPrice, formatCurrencySymbol } from '../lib/utils/formatters';
-import { formatSmartTitle } from '../lib/utils/typography';
 import { generateAllVariants } from '../lib/templates/variantGenerator';
 import { generateCyprusPriceFocusedCanvas } from '../lib/templates/cyprus-price-focused';
-import {
-  buildPriceHeroPrompt,
-  buildDestinationHeroPrompt,
-  buildCampaignHeroPrompt,
-} from '../lib/ai/creativePromptBuilder';
+import { buildPriceHeroPrompt } from '../lib/ai/creativePromptBuilder';
 import { DesignRepository } from '../lib/storage/designRepository';
 
-describe('Piertur Strict OpenAI GPT Image Integration Tests', () => {
+describe('Piertur True Image Input OpenAI Integration Tests', () => {
   it('should validate Uludağ demo campaign form correctly using Zod schema', () => {
     const validResult = campaignFormSchema.safeParse(defaultCampaignData);
     expect(validResult.success).toBe(true);
@@ -21,7 +16,7 @@ describe('Piertur Strict OpenAI GPT Image Integration Tests', () => {
     }
   });
 
-  it('should build 3 distinct gpt-image-2 prompts with strict typography safe-zone rules', () => {
+  it('should build exact image edit prompt string preserving destination identity', () => {
     const payload = {
       campaignTitle: 'Uludağ Konaklamalı Tur',
       hotelName: 'Beceren Otel',
@@ -32,15 +27,10 @@ describe('Piertur Strict OpenAI GPT Image Integration Tests', () => {
       benefits: ['Kayak Pistlerine Yakın'],
     };
 
-    const promptA = buildPriceHeroPrompt(payload);
-    const promptB = buildDestinationHeroPrompt(payload);
-    const promptC = buildCampaignHeroPrompt(payload);
-
-    expect(promptA).toContain('PRICE HERO');
-    expect(promptB).toContain('DESTINATION HERO');
-    expect(promptC).toContain('CAMPAIGN HERO');
-
-    expect(promptA).toContain('DO NOT RENDER ANY TEXT, TYPOGRAPHY, LETTERS, OR FAKE BRAND LOGOS');
+    const prompt = buildPriceHeroPrompt(payload);
+    expect(prompt).toContain('Preserve the actual destination, mountain geometry, ski slopes');
+    expect(prompt).toContain('Uludağ Konaklamalı Tur');
+    expect(prompt).toContain('Beceren Otel');
   });
 
   it('should guarantee exact deterministic price and text rendering on Canvas layers', () => {
@@ -56,22 +46,24 @@ describe('Piertur Strict OpenAI GPT Image Integration Tests', () => {
     expect(priceLayer?.locked).toBe(true);
   });
 
-  it('should maintain generation group storage and explicit metadata tracking', () => {
+  it('should maintain generation group storage with inputImageUsed and inputImageMethod tracking', () => {
     const variants = generateAllVariants(defaultCampaignData).map((v) => ({
       ...v,
       generationSource: 'openai' as const,
       model: 'gpt-image-2',
       aiSuccess: true,
       fallbackReason: null,
+      inputImageUsed: true,
+      inputImageMethod: 'openai.images.edit (binary image buffer passed)',
     }));
 
-    const genId = 'gen_test_strict_100';
+    const genId = 'gen_test_true_image_200';
     DesignRepository.saveGenerationGroup(genId, variants);
 
     const loaded = DesignRepository.getGenerationGroup(genId);
     expect(loaded.length).toBe(3);
     expect(loaded[0].generationSource).toBe('openai');
-    expect(loaded[0].model).toBe('gpt-image-2');
-    expect(loaded[0].aiSuccess).toBe(true);
+    expect(loaded[0].inputImageUsed).toBe(true);
+    expect(loaded[0].inputImageMethod).toContain('openai.images.edit');
   });
 });

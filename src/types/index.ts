@@ -83,6 +83,8 @@ export interface DesignModel {
   model?: string;
   aiSuccess?: boolean;
   fallbackReason?: string | null;
+  inputImageUsed?: boolean;
+  inputImageMethod?: string;
 }
 
 export interface TemplateModel {
