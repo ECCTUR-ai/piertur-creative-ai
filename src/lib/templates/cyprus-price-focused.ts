@@ -1,6 +1,7 @@
 import { CampaignInfo, CanvasData, CanvasLayer } from '@/types';
 import { formatPrice, formatCurrencySymbol } from '../utils/formatters';
 import { formatSmartTitle } from '../utils/typography';
+import { BrandRepository } from '../storage/brandRepository';
 
 export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): CanvasData {
   const headline = formatSmartTitle(campaign.title);
@@ -13,13 +14,14 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
   }`;
   const citiesText = `📍 ${campaign.departureCities.join(' • ')} ÇIKIŞLI`;
   const badge = (campaign.badgeText || 'SON DAKİKA FIRSATI').toUpperCase();
+  const brandKit = BrandRepository.getBrandKit();
 
   const bgUrl =
     campaign.backgroundImageUrl ||
     'https://images.unsplash.com/photo-1551524559-8af4e6624178?auto=format&fit=crop&w=1080&q=80';
 
   const elements: CanvasLayer[] = [
-    // 1. Full Bleed Background Destination Photo (60%+ Photo Dominance)
+    // 1. Full-Bleed Background Destination Photo (65-70%+ Dominance)
     {
       id: 'bg-image',
       name: 'Full-Bleed Destination Photo',
@@ -35,7 +37,7 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       zIndex: 1,
     },
 
-    // 2. Sophisticated Atmospheric Gradient Vignettes (No Solid Web Boxes)
+    // 2. Atmospheric Gradient Vignettes (No Solid Rectangular Boxes)
     {
       id: 'bg-overlay-top',
       name: 'Top Readability Vignette',
@@ -65,39 +67,58 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       zIndex: 2,
     },
 
-    // 3. Top Left: Clean Corporate Logo Mark Frame
-    {
-      id: 'logo-badge-bg',
-      name: 'Logo Mark Container',
-      type: 'rect',
-      x: 60,
-      y: 75,
-      width: 260,
-      height: 64,
-      fill: 'rgba(8, 46, 99, 0.9)',
-      borderRadius: 14,
-      stroke: '#FFB21C',
-      strokeWidth: 2,
-      locked: true,
-      visible: true,
-      zIndex: 3,
-    },
-    {
-      id: 'logo-text-primary',
-      name: 'Piertur Brand Text',
-      type: 'text',
-      x: 82,
-      y: 92,
-      text: 'PIERTUR',
-      fontSize: 28,
-      fontFamily: 'Montserrat, sans-serif',
-      fontWeight: '900',
-      fill: '#FFFFFF',
-      letterSpacing: 4,
-      locked: true,
-      visible: true,
-      zIndex: 4,
-    },
+    // 3. Top Left: Piertur Logo Mark (Uses Custom Transparent Logo if loaded)
+    ...(brandKit.logoUrl
+      ? [
+          {
+            id: 'logo-custom-img',
+            name: 'Piertur Custom Logo Image',
+            type: 'image' as const,
+            x: 60,
+            y: 75,
+            width: 240,
+            height: 64,
+            src: brandKit.logoUrl,
+            fit: 'contain' as const,
+            locked: true,
+            visible: true,
+            zIndex: 4,
+          },
+        ]
+      : [
+          {
+            id: 'logo-badge-bg',
+            name: 'Logo Mark Frame',
+            type: 'rect' as const,
+            x: 60,
+            y: 75,
+            width: 260,
+            height: 64,
+            fill: 'rgba(8, 46, 99, 0.9)',
+            borderRadius: 14,
+            stroke: '#FFB21C',
+            strokeWidth: 2,
+            locked: true,
+            visible: true,
+            zIndex: 3,
+          },
+          {
+            id: 'logo-text-primary',
+            name: 'Piertur Brand Text',
+            type: 'text' as const,
+            x: 82,
+            y: 92,
+            text: 'PIERTUR',
+            fontSize: 28,
+            fontFamily: 'Montserrat, sans-serif',
+            fontWeight: '900',
+            fill: '#FFFFFF',
+            letterSpacing: 4,
+            locked: true,
+            visible: true,
+            zIndex: 4,
+          },
+        ]),
 
     // 4. Top Right: Angled Red Campaign Ribbon
     {
@@ -134,7 +155,7 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       zIndex: 4,
     },
 
-    // 5. Giant Headline: ULUDAĞ + KONAKLAMALI TUR
+    // 5. Hero Destination Headline
     {
       id: 'title-primary',
       name: 'Main Destination Headline',
@@ -202,7 +223,7 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       zIndex: 8,
     },
 
-    // 7. Floating Hero Price Callout (Floating Directly Over Atmospheric Background)
+    // 7. Floating Hero Price Callout (No Opaque Cards)
     {
       id: 'price-prefix',
       name: 'Hero Price Prefix Callout',
@@ -251,7 +272,7 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       zIndex: 12,
     },
 
-    // 8. Duration & Board Type Pill
+    // 8. Duration Stay Pill
     {
       id: 'duration-pill-bg',
       name: 'Duration Stay Pill',
@@ -378,7 +399,7 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       zIndex: 21,
     },
 
-    // 12. Corporate Piertur Footer Bar
+    // 12. Branded Corporate Footer Bar
     {
       id: 'footer-bar-bg',
       name: 'Corporate Footer Bar Container',
@@ -398,7 +419,7 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       type: 'text',
       x: 60,
       y: 1820,
-      text: '🌐 piertur.com',
+      text: `🌐 ${brandKit.website || 'piertur.com'}`,
       fontSize: 26,
       fontFamily: 'Montserrat, sans-serif',
       fontWeight: '700',
@@ -413,7 +434,7 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       type: 'text',
       x: 430,
       y: 1820,
-      text: '📸 @piertur',
+      text: `📸 ${brandKit.socialHandle || '@piertur'}`,
       fontSize: 26,
       fontFamily: 'Montserrat, sans-serif',
       fontWeight: '700',
@@ -428,7 +449,7 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       type: 'text',
       x: 750,
       y: 1820,
-      text: '📞 444 0 743',
+      text: `📞 ${brandKit.phone || '444 0 743'}`,
       fontSize: 26,
       fontFamily: 'Montserrat, sans-serif',
       fontWeight: '700',
