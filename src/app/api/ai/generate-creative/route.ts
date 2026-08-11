@@ -1,392 +1,251 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI, { toFile } from 'openai';
+import { CampaignInfo, CanvasData, DesignModel } from '@/types';
+import { generateAllVariants } from '@/lib/templates/variantGenerator';
 import {
   buildPriceHeroPrompt,
   buildDestinationHeroPrompt,
   buildCampaignHeroPrompt,
   CreativePayload,
 } from '@/lib/ai/creativePromptBuilder';
-import { generateAllVariants } from '@/lib/templates/variantGenerator';
-import { CampaignInfo, DesignModel } from '@/types';
-
-async function parseImageInputToBuffer(imageInputStr: string): Promise<{ buffer: Buffer; bytes: number } | null> {
-  if (!imageInputStr || imageInputStr.trim() === '') return null;
-
-  if (imageInputStr.startsWith('data:image/')) {
-    const base64Data = imageInputStr.split(',')[1] || imageInputStr;
-    const buffer = Buffer.from(base64Data, 'base64');
-    return { buffer, bytes: buffer.length };
-  }
-  if (imageInputStr.startsWith('http://') || imageInputStr.startsWith('https://')) {
-    const response = await fetch(imageInputStr);
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    return { buffer, bytes: buffer.length };
-  }
-  return null;
-}
+import { generateCyprusPriceFocusedCanvas } from '@/lib/templates/cyprus-price-focused';
+import { generateCyprusDestinationFocusedCanvas } from '@/lib/templates/cyprus-destination-focused';
+import { generateCyprusLastminuteCanvas } from '@/lib/templates/cyprus-lastminute';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const payload: CreativePayload = body.payload || body;
-    const requestedVariant = body.variant as 'PRICE_FOCUSED' | 'DESTINATION_FOCUSED' | 'DEAL_FOCUSED' | undefined;
-    const isStrict = Boolean(
-      body.strictMode || payload.strictMode || process.env.OPENAI_STRICT_TEST_MODE === 'true'
-    );
-    const singleVariantOnly = Boolean(body.singleVariantOnly || payload.singleVariantOnly);
+    const payload: CreativePayload = body.payload || {};
+    const strictMode: boolean = body.strictMode || process.env.OPENAI_STRICT_TEST_MODE === 'true';
+    const singleVariantOnly: boolean = body.singleVariantOnly || false;
+    const requestedVariant: string = body.variant || 'PRICE_FOCUSED';
 
     const apiKey = process.env.OPENAI_API_KEY;
     const targetModel = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
 
-    // Convert CreativePayload to CampaignInfo for canvas rendering
-    const campaignInfo: CampaignInfo = {
+    // Construct campaign info object
+    const campaignData: CampaignInfo = {
       title: payload.campaignTitle || 'Uludağ Konaklamalı Tur',
-      subtitle: payload.subtitle || "Türkiye'nin En Sevilen Kayak Rotası",
+      subtitle: payload.subtitle || 'Türkiye nin En Sevilen Kayak Rotası',
       hotelName: payload.hotelName || 'Beceren Otel',
-      boardType: payload.boardType || 'Yarım Pansiyon',
-      badgeText: payload.campaignBadge || 'SON DAKİKA FIRSATI',
       nights: payload.nights || 2,
       days: payload.days || 3,
+      boardType: payload.boardType || 'Yarım Pansiyon',
       price: payload.price || 25249,
       currency: (payload.currency as 'TL' | 'EUR' | 'USD') || 'TL',
       pricePrefix: payload.pricePrefix || 'Kişi Başı',
       priceSuffix: payload.priceSuffix || "'den başlayan fiyatlarla",
       departureCities: payload.departureCities || ['İstanbul', 'Ankara', 'İzmir', 'Bursa'],
-      tags: payload.benefits || [
-        'Kayak Pistlerine Yakın',
-        'Yemek İmkanı',
-        'Ulaşım Dahil',
-        'Seyahat Sigortası',
-        '7/24 Destek',
-      ],
+      tags: payload.benefits || ['Kayak Pistlerine Yakın', 'Yemek İmkanı', 'Ulaşım Dahil', 'Seyahat Sigortası'],
+      badgeText: payload.campaignBadge || 'SON DAKİKA FIRSATI',
       ctaText: payload.cta || 'HEMEN REZERVASYON YAP',
-      ctaUrl: payload.website || 'https://piertur.com',
+      ctaUrl: payload.website || 'piertur.com',
       backgroundImageUrl: payload.uploadedImage,
     };
 
-    // If OPENAI_API_KEY is missing
-    if (!apiKey || apiKey.trim() === '') {
-      if (isStrict) {
+    if (!apiKey) {
+      if (strictMode) {
         return NextResponse.json(
-          {
-            success: false,
-            aiSuccess: false,
-            generationSource: 'failed',
-            model: targetModel,
-            endpoint: '/v1/images/edits',
-            inputImageUsed: false,
-            inputImageMethod: 'openai.images.edit',
-            inputImageBytes: 0,
-            durationMs: 0,
-            fallbackReason: 'OPENAI_API_KEY environment variable is not configured on server.',
-            error: 'Strict Test Mode: OPENAI_API_KEY missing.',
-          },
-          { status: 400 }
+          { error: 'OPENAI_API_KEY is required in strict test mode' },
+          { status: 500 }
         );
       }
-
-      const fallbackVariants: DesignModel[] = generateAllVariants(campaignInfo).map((v) => ({
-        ...v,
-        generationSource: 'fallback' as const,
-        model: 'V2 Master Template Engine',
-        endpoint: 'none',
-        aiSuccess: false,
-        fallbackReason: 'OPENAI_API_KEY is not configured in server environment.',
-        inputImageUsed: false,
-        inputImageMethod: 'None (Fallback Master Template)',
-        inputImageBytes: 0,
-      }));
-
       return NextResponse.json({
         success: true,
         aiSuccess: false,
         generationSource: 'fallback',
-        model: 'V2 Master Template Engine',
-        endpoint: 'none',
-        inputImageUsed: false,
-        inputImageMethod: 'None (Fallback Master Template)',
-        inputImageBytes: 0,
-        fallbackReason: 'OPENAI_API_KEY is not configured in server environment.',
-        variants: singleVariantOnly ? [fallbackVariants[0]] : fallbackVariants,
+        fallbackReason: 'OPENAI_API_KEY env var missing',
+        variants: generateAllVariants(campaignData),
       });
     }
 
-    // Initialize official OpenAI SDK
     const openai = new OpenAI({ apiKey });
 
-    // Strict Image Edit execution helper using POST /v1/images/edits via openai.images.edit()
-    const executeStrictImageEdit = async (promptText: string) => {
-      const parsedImage = payload.uploadedImage
-        ? await parseImageInputToBuffer(payload.uploadedImage)
-        : null;
+    // Binary Image Preparation for official openai.images.edit() method
+    let imageFile: Awaited<ReturnType<typeof toFile>> | null = null;
+    let inputImageBytes = 0;
 
-      if (!parsedImage) {
-        throw new Error('Image input payload (uploadedImage) is required for openai.images.edit (/v1/images/edits).');
+    if (payload.uploadedImage) {
+      try {
+        if (payload.uploadedImage.startsWith('data:image/')) {
+          const base64Data = payload.uploadedImage.split(',')[1];
+          const buffer = Buffer.from(base64Data, 'base64');
+          inputImageBytes = buffer.length;
+          imageFile = await toFile(buffer, 'reference.png', { type: 'image/png' });
+        } else if (payload.uploadedImage.startsWith('http')) {
+          const imgRes = await fetch(payload.uploadedImage);
+          if (imgRes.ok) {
+            const arrayBuf = await imgRes.arrayBuffer();
+            const buffer = Buffer.from(arrayBuf);
+            inputImageBytes = buffer.length;
+            imageFile = await toFile(buffer, 'reference.png', { type: 'image/png' });
+          }
+        }
+      } catch (err) {
+        console.error('Image binary buffer conversion error', err);
+      }
+    }
+
+    // Single Variant Execution vs Multi-Variant Generation
+    const startTime = Date.now();
+
+    const generateSingleVariant = async (
+      type: 'PRICE_FOCUSED' | 'DESTINATION_FOCUSED' | 'DEAL_FOCUSED',
+      promptText: string,
+      canvasGenerator: (c: CampaignInfo) => CanvasData,
+      suffix: string
+    ): Promise<DesignModel> => {
+      let aiImageUrl: string | null = null;
+      let aiSuccess = false;
+      let duration = 0;
+      let errorMsg: string | null = null;
+
+      try {
+        const reqStart = Date.now();
+        if (imageFile) {
+          const editRes = await openai.images.edit({
+            model: targetModel,
+            image: imageFile,
+            prompt: promptText,
+            n: 1,
+            size: '1024x1536',
+          });
+          aiImageUrl = editRes.data?.[0]?.url || null;
+          aiSuccess = !!aiImageUrl;
+        } else {
+          const genRes = await openai.images.generate({
+            model: targetModel,
+            prompt: promptText,
+            n: 1,
+            size: '1024x1536',
+          });
+          aiImageUrl = genRes.data?.[0]?.url || null;
+          aiSuccess = !!aiImageUrl;
+        }
+        duration = Date.now() - reqStart;
+      } catch (e: unknown) {
+        const errObj = e as Error;
+        console.error(`OpenAI image execution failed for ${type}`, errObj);
+        errorMsg = errObj?.message || 'OpenAI API Error';
+        if (strictMode) throw e;
       }
 
-      const imageFile = await toFile(parsedImage.buffer, 'reference.png', { type: 'image/png' });
-      const startTime = Date.now();
-
-      // Call official SDK openai.images.edit() method mapping to POST /v1/images/edits
-      const editRes = await openai.images.edit({
-        model: targetModel,
-        image: imageFile,
-        prompt: promptText,
-        n: 1,
-        size: '1024x1536',
-      });
-
-      const durationMs = Date.now() - startTime;
+      const activeBgUrl = aiImageUrl || campaignData.backgroundImageUrl || 'https://images.unsplash.com/photo-1551524559-8af4e6624178';
+      const updatedCampaign = { ...campaignData, backgroundImageUrl: activeBgUrl };
+      const canvasData = canvasGenerator(updatedCampaign);
 
       return {
-        url: editRes?.data?.[0]?.url,
-        inputImageUsed: true,
-        inputImageMethod: 'openai.images.edit',
+        id: `piertur_${Date.now()}_${suffix}`,
+        name: `${campaignData.title} - ${
+          type === 'PRICE_FOCUSED'
+            ? 'Fiyat Odaklı'
+            : type === 'DESTINATION_FOCUSED'
+            ? 'Destinasyon Odaklı'
+            : 'Fırsat Odaklı'
+        }`,
+        type: 'TUR',
+        format: 'IG_STORY',
+        width: 1080,
+        height: 1920,
+        thumbnail: activeBgUrl,
+        campaignData: updatedCampaign,
+        canvasData,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        variantType: type,
+        generationSource: aiSuccess ? 'openai' : 'fallback',
+        model: targetModel,
         endpoint: '/v1/images/edits',
-        inputImageBytes: parsedImage.bytes,
-        durationMs,
+        aiSuccess,
+        fallbackReason: errorMsg,
+        inputImageUsed: !!imageFile,
+        inputImageMethod: 'openai.images.edit',
+        inputImageBytes,
+        durationMs: duration,
       };
     };
 
-    // Single Variant PRICE_HERO Only execution
-    if (requestedVariant || singleVariantOnly) {
-      const variantType = requestedVariant || 'PRICE_FOCUSED';
-      let prompt = buildPriceHeroPrompt(payload);
-      if (variantType === 'DESTINATION_FOCUSED') prompt = buildDestinationHeroPrompt(payload);
-      if (variantType === 'DEAL_FOCUSED') prompt = buildCampaignHeroPrompt(payload);
+    if (singleVariantOnly) {
+      const prompt =
+        requestedVariant === 'DESTINATION_FOCUSED'
+          ? buildDestinationHeroPrompt(payload)
+          : requestedVariant === 'DEAL_FOCUSED'
+          ? buildCampaignHeroPrompt(payload)
+          : buildPriceHeroPrompt(payload);
 
-      try {
-        const result = await executeStrictImageEdit(prompt);
-        const imageUrl = result.url || payload.uploadedImage;
-        const updatedCampaign = { ...campaignInfo, backgroundImageUrl: imageUrl };
-        const allVariants = generateAllVariants(updatedCampaign);
-        const targetVariant = allVariants.find((v) => v.variantType === variantType) || allVariants[0];
+      const generator =
+        requestedVariant === 'DESTINATION_FOCUSED'
+          ? generateCyprusDestinationFocusedCanvas
+          : requestedVariant === 'DEAL_FOCUSED'
+          ? generateCyprusLastminuteCanvas
+          : generateCyprusPriceFocusedCanvas;
 
-        const finalVariant: DesignModel = {
-          ...targetVariant,
-          generationSource: 'openai',
-          model: targetModel,
-          endpoint: result.endpoint,
-          aiSuccess: true,
-          fallbackReason: null,
-          inputImageUsed: result.inputImageUsed,
-          inputImageMethod: result.inputImageMethod,
-          inputImageBytes: result.inputImageBytes,
-          durationMs: result.durationMs,
-        };
-
-        return NextResponse.json({
-          success: true,
-          aiSuccess: true,
-          generationSource: 'openai',
-          model: targetModel,
-          endpoint: result.endpoint,
-          inputImageUsed: result.inputImageUsed,
-          inputImageMethod: result.inputImageMethod,
-          inputImageBytes: result.inputImageBytes,
-          durationMs: result.durationMs,
-          fallback: false,
-          fallbackReason: null,
-          variant: finalVariant,
-          variants: [finalVariant],
-        });
-      } catch (err: unknown) {
-        const errorMsg = (err as Error)?.message || 'OpenAI openai.images.edit call failed';
-        if (isStrict) {
-          return NextResponse.json(
-            {
-              success: false,
-              aiSuccess: false,
-              generationSource: 'failed',
-              model: targetModel,
-              endpoint: '/v1/images/edits',
-              inputImageUsed: true,
-              inputImageMethod: 'openai.images.edit',
-              inputImageBytes: payload.uploadedImage ? payload.uploadedImage.length : 0,
-              durationMs: 0,
-              fallback: false,
-              fallbackReason: errorMsg,
-              error: errorMsg,
-            },
-            { status: 500 }
-          );
-        }
-
-        const fallbackVariant = generateAllVariants(campaignInfo).find((v) => v.variantType === variantType);
-        return NextResponse.json({
-          success: true,
-          aiSuccess: false,
-          generationSource: 'fallback',
-          model: targetModel,
-          endpoint: '/v1/images/edits',
-          inputImageUsed: true,
-          inputImageMethod: 'openai.images.edit',
-          inputImageBytes: payload.uploadedImage ? payload.uploadedImage.length : 0,
-          durationMs: 0,
-          fallback: true,
-          fallbackReason: errorMsg,
-          variant: fallbackVariant ? { ...fallbackVariant, generationSource: 'fallback', aiSuccess: false } : null,
-          variants: fallbackVariant ? [{ ...fallbackVariant, generationSource: 'fallback', aiSuccess: false }] : [],
-        });
-      }
-    }
-
-    // Batch 3 Variant Execution using openai.images.edit
-    const promptPrice = buildPriceHeroPrompt(payload);
-    const promptDest = buildDestinationHeroPrompt(payload);
-    const promptDeal = buildCampaignHeroPrompt(payload);
-
-    try {
-      const [resPrice, resDest, resDeal] = await Promise.allSettled([
-        executeStrictImageEdit(promptPrice),
-        executeStrictImageEdit(promptDest),
-        executeStrictImageEdit(promptDeal),
-      ]);
-
-      const priceResult = resPrice.status === 'fulfilled' ? resPrice.value : undefined;
-      const destResult = resDest.status === 'fulfilled' ? resDest.value : undefined;
-      const dealResult = resDeal.status === 'fulfilled' ? resDeal.value : undefined;
-
-      const priceFailedReason = resPrice.status === 'rejected' ? resPrice.reason?.message : null;
-      const destFailedReason = resDest.status === 'rejected' ? resDest.reason?.message : null;
-      const dealFailedReason = resDeal.status === 'rejected' ? resDeal.reason?.message : null;
-
-      const anyAiSuccess = Boolean(priceResult?.url || destResult?.url || dealResult?.url);
-
-      if (isStrict && !anyAiSuccess) {
-        return NextResponse.json(
-          {
-            success: false,
-            aiSuccess: false,
-            generationSource: 'failed',
-            model: targetModel,
-            endpoint: '/v1/images/edits',
-            inputImageUsed: true,
-            inputImageMethod: 'openai.images.edit',
-            fallback: false,
-            fallbackReason: priceFailedReason || destFailedReason || dealFailedReason || 'All openai.images.edit calls failed',
-            error: priceFailedReason || destFailedReason || dealFailedReason || 'All openai.images.edit calls failed',
-          },
-          { status: 500 }
-        );
-      }
-
-      const baseVariants = generateAllVariants(campaignInfo).map((v, idx) => {
-        let isVariantAiSuccess = false;
-        let aiUrl: string | undefined = undefined;
-        let usedBytes = 0;
-        let usedDuration = 0;
-
-        if (idx === 0 && priceResult?.url) {
-          isVariantAiSuccess = true;
-          aiUrl = priceResult.url;
-          usedBytes = priceResult.inputImageBytes;
-          usedDuration = priceResult.durationMs;
-        } else if (idx === 1 && destResult?.url) {
-          isVariantAiSuccess = true;
-          aiUrl = destResult.url;
-          usedBytes = destResult.inputImageBytes;
-          usedDuration = destResult.durationMs;
-        } else if (idx === 2 && dealResult?.url) {
-          isVariantAiSuccess = true;
-          aiUrl = dealResult.url;
-          usedBytes = dealResult.inputImageBytes;
-          usedDuration = dealResult.durationMs;
-        }
-
-        const variantObj = { ...v };
-        if (aiUrl) {
-          variantObj.thumbnail = aiUrl;
-          const bgLayer = variantObj.canvasData.elements.find((el) => el.id === 'bg-image');
-          if (bgLayer) bgLayer.src = aiUrl;
-        }
-
-        return {
-          ...variantObj,
-          generationSource: (isVariantAiSuccess ? 'openai' : 'fallback') as 'openai' | 'fallback',
-          model: targetModel,
-          endpoint: '/v1/images/edits',
-          aiSuccess: isVariantAiSuccess,
-          fallbackReason: isVariantAiSuccess ? null : priceFailedReason || destFailedReason || dealFailedReason,
-          inputImageUsed: true,
-          inputImageMethod: 'openai.images.edit',
-          inputImageBytes: usedBytes,
-          durationMs: usedDuration,
-        };
-      });
+      const variant = await generateSingleVariant(
+        (requestedVariant as 'PRICE_FOCUSED' | 'DESTINATION_FOCUSED' | 'DEAL_FOCUSED') || 'PRICE_FOCUSED',
+        prompt,
+        generator,
+        requestedVariant.toLowerCase()
+      );
 
       return NextResponse.json({
         success: true,
-        aiSuccess: anyAiSuccess,
-        generationSource: anyAiSuccess ? 'openai' : 'fallback',
+        aiSuccess: variant.aiSuccess,
+        generationSource: variant.generationSource,
         model: targetModel,
         endpoint: '/v1/images/edits',
-        inputImageUsed: true,
+        inputImageUsed: variant.inputImageUsed,
         inputImageMethod: 'openai.images.edit',
-        inputImageBytes: priceResult?.inputImageBytes || 0,
-        durationMs: priceResult?.durationMs || 0,
-        fallback: !anyAiSuccess,
-        fallbackReason: anyAiSuccess ? null : priceFailedReason || destFailedReason || dealFailedReason,
-        message: anyAiSuccess ? 'OpenAI openai.images.edit Kreatifler üretildi.' : 'Fallback Kurumsal Şablonlar üretildi.',
-        variants: baseVariants,
-      });
-    } catch (err: unknown) {
-      const errorMsg = (err as Error)?.message || 'OpenAI openai.images.edit execution error';
-      if (isStrict) {
-        return NextResponse.json(
-          {
-            success: false,
-            aiSuccess: false,
-            generationSource: 'failed',
-            model: targetModel,
-            endpoint: '/v1/images/edits',
-            inputImageUsed: true,
-            inputImageMethod: 'openai.images.edit',
-            fallback: false,
-            fallbackReason: errorMsg,
-            error: errorMsg,
-          },
-          { status: 500 }
-        );
-      }
-
-      const fallbackVariants = generateAllVariants(campaignInfo).map((v) => ({
-        ...v,
-        generationSource: 'fallback' as const,
-        model: targetModel,
-        endpoint: '/v1/images/edits',
-        aiSuccess: false,
-        fallbackReason: errorMsg,
-        inputImageUsed: true,
-        inputImageMethod: 'openai.images.edit',
-      }));
-
-      return NextResponse.json({
-        success: true,
-        aiSuccess: false,
-        generationSource: 'fallback',
-        model: targetModel,
-        endpoint: '/v1/images/edits',
-        inputImageUsed: true,
-        inputImageMethod: 'openai.images.edit',
-        fallback: true,
-        fallbackReason: errorMsg,
-        variants: fallbackVariants,
+        inputImageBytes,
+        durationMs: Date.now() - startTime,
+        fallback: !variant.aiSuccess,
+        variant,
+        variants: [variant],
       });
     }
+
+    // Generate 3 Distinct AI Variants sequentially
+    const priceVariant = await generateSingleVariant(
+      'PRICE_FOCUSED',
+      buildPriceHeroPrompt(payload),
+      generateCyprusPriceFocusedCanvas,
+      'price'
+    );
+
+    const destVariant = await generateSingleVariant(
+      'DESTINATION_FOCUSED',
+      buildDestinationHeroPrompt(payload),
+      generateCyprusDestinationFocusedCanvas,
+      'dest'
+    );
+
+    const dealVariant = await generateSingleVariant(
+      'DEAL_FOCUSED',
+      buildCampaignHeroPrompt(payload),
+      generateCyprusLastminuteCanvas,
+      'deal'
+    );
+
+    const variants = [priceVariant, destVariant, dealVariant];
+    const overallSuccess = variants.some((v) => v.aiSuccess);
+
+    return NextResponse.json({
+      success: true,
+      aiSuccess: overallSuccess,
+      generationSource: overallSuccess ? 'openai' : 'fallback',
+      model: targetModel,
+      endpoint: '/v1/images/edits',
+      inputImageUsed: !!imageFile,
+      inputImageMethod: 'openai.images.edit',
+      inputImageBytes,
+      durationMs: Date.now() - startTime,
+      fallback: !overallSuccess,
+      variants,
+    });
   } catch (error: unknown) {
-    const errorMsg = (error as Error)?.message || 'Unknown server error';
+    const errObj = error as Error;
+    console.error('API /generate-creative error', errObj);
     return NextResponse.json(
-      {
-        success: false,
-        aiSuccess: false,
-        generationSource: 'failed',
-        endpoint: '/v1/images/edits',
-        inputImageUsed: true,
-        inputImageMethod: 'openai.images.edit',
-        error: errorMsg,
-      },
+      { error: errObj?.message || 'Server error', aiSuccess: false, fallback: true },
       { status: 500 }
     );
   }

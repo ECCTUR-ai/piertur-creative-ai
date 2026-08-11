@@ -1,45 +1,57 @@
 /**
  * Centralized OpenAI GPT Image Creative Prompt Builder for Piertur Creative AI
+ * Generates 3 distinct art-directed prompts using the Creative Intelligence Layer.
  */
 
-export interface CreativePayload {
-  campaignType?: string;
-  campaignTitle: string;
-  subtitle?: string;
-  hotelName?: string;
-  nights: number;
-  days: number;
-  boardType?: string;
-  price: number;
-  currency?: string;
-  pricePrefix?: string;
-  priceSuffix?: string;
-  departureCities: string[];
-  benefits: string[];
-  campaignBadge?: string;
-  cta?: string;
-  website?: string;
-  uploadedImage?: string;
-  strictMode?: boolean;
-  singleVariantOnly?: boolean;
-}
+import { analyzeCampaignContext, CreativePayload } from './creativeIntelligence';
+
+export type { CreativePayload };
 
 export function buildPriceHeroPrompt(payload: CreativePayload): string {
+  const ctx = analyzeCampaignContext(payload.campaignTitle, payload.benefits, payload.campaignBadge);
+
   return `
-Preserve the actual destination, mountain geometry, ski slopes, buildings, chairlifts and general photographic identity of the supplied image (${payload.campaignTitle}).
-Transform it into: premium Turkish tour operator advertising, agency-grade social media campaign, sophisticated travel editorial composition, full bleed destination photography, layered navy (#082E63) / warm yellow (#FFB21C) / controlled red (#E31C24) graphic accents, subtle diagonal graphic forms, premium depth and lighting, sophisticated negative space, strong visual hierarchy, modern travel advertising.
-CRITICAL INSTRUCTION: Clean areas reserved for real typography. No fake logo. No fake text. No fake prices. No random hotel names.
+Create a complete agency-grade conversion-focused social media advertising background based on the supplied photograph (${payload.campaignTitle}).
+Destination Mood: ${ctx.visualMood}.
+Lighting: ${ctx.lightingStyle}.
+Color Palette: Piertur Navy (#082E63), Warm Gold (#FFB21C), Conversion Red (#E31C24), White (#FFFFFF).
+
+Art Direction Requirements:
+- Transform the photography into a high-converting Turkish tour operator commercial story campaign.
+- Maintain subject-safe composition where the upper top area is dark and clean for destination title overlays, and the lower bottom area has atmospheric dark navy vignetting for price typography callouts.
+- Add subtle diagonal geometric graphic lines in navy and gold.
+- CRITICAL RULES: No fake text, no fake logos, no fake price numbers, no random hotel labels. Clean safe-zones reserved for precision typography.
 `.trim();
 }
 
 export function buildDestinationHeroPrompt(payload: CreativePayload): string {
+  const ctx = analyzeCampaignContext(payload.campaignTitle, payload.benefits, payload.campaignBadge);
+
   return `
-Preserve the natural scenery and photographic identity of the supplied image (${payload.campaignTitle}). Transform it into an editorial travel magazine 9:16 advertisement artwork. Do not render any logos, text, or letters. Create clean typography safe-zones.
+Create a high-end luxury editorial travel magazine advertisement background based on the supplied photograph (${payload.campaignTitle}).
+Destination Mood: ${ctx.visualMood}, cinematic atmosphere, expansive negative space, high-fashion travel photography styling.
+Lighting: ${ctx.lightingStyle}, subtle lens flare, deep cinematic contrast.
+Color Palette: Deep Piertur Navy (#082E63), Champagne Gold (#FFB21C), Soft White.
+
+Art Direction Requirements:
+- Photography-first editorial layout. Destination is the hero.
+- Clean typography safe-zones at top third and bottom quarter.
+- CRITICAL RULES: No fake text, no fake logos, no fake price numbers. Clean safe-zones reserved for precision typography.
 `.trim();
 }
 
 export function buildCampaignHeroPrompt(payload: CreativePayload): string {
+  const ctx = analyzeCampaignContext(payload.campaignTitle, payload.benefits, payload.campaignBadge);
+
   return `
-Preserve the key photographic subjects of the supplied image (${payload.campaignTitle}). Transform it into an urgent flash-deal campaign advertisement background with bold red and yellow accent geometry. Do not render logos or typography.
+Create an urgent flash-deal promotional tourism campaign advertisement background based on the supplied photograph (${payload.campaignTitle}).
+Destination Mood: ${ctx.visualMood}, high-energy promotional advertising, dynamic speed lines, urgent campaign badging area.
+Lighting: ${ctx.lightingStyle}, high contrast commercial lighting.
+Color Palette: Bold Red (#E31C24), Electric Gold (#FFB21C), Deep Navy (#082E63).
+
+Art Direction Requirements:
+- Promotion-first campaign layout with energetic diagonal badging geometries at top right and bottom CTA zone.
+- Photography remains visible and vibrant through the center.
+- CRITICAL RULES: No fake text, no fake logos, no fake price numbers. Clean safe-zones reserved for precision typography.
 `.trim();
 }
