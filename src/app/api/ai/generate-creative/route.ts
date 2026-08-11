@@ -7,15 +7,19 @@ import {
   CreativePayload,
 } from '@/lib/ai/creativePromptBuilder';
 import { generateAllVariants } from '@/lib/templates/variantGenerator';
-import { CampaignInfo } from '@/types';
+import { CampaignInfo, DesignModel } from '@/types';
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const payload: CreativePayload = body.payload || body;
     const requestedVariant = body.variant as 'PRICE_FOCUSED' | 'DESTINATION_FOCUSED' | 'DEAL_FOCUSED' | undefined;
+    const isStrict = Boolean(
+      body.strictMode || payload.strictMode || process.env.OPENAI_STRICT_TEST_MODE === 'true'
+    );
 
     const apiKey = process.env.OPENAI_API_KEY;
+    const targetModel = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
 
     // Convert CreativePayload to CampaignInfo for canvas rendering
     const campaignInfo: CampaignInfo = {
@@ -43,113 +47,235 @@ export async function POST(req: NextRequest) {
       backgroundImageUrl: payload.uploadedImage,
     };
 
-    // If OPENAI_API_KEY is missing, gracefully use Master Template Fallback Engine
+    // If OPENAI_API_KEY is missing
     if (!apiKey || apiKey.trim() === '') {
-      const fallbackVariants = generateAllVariants(campaignInfo);
+      if (isStrict) {
+        return NextResponse.json(
+          {
+            success: false,
+            aiSuccess: false,
+            generationSource: 'failed',
+            model: targetModel,
+            fallbackReason: 'OPENAI_API_KEY environment variable is not configured on server.',
+            error: 'Strict Test Mode: OPENAI_API_KEY missing.',
+          },
+          { status: 400 }
+        );
+      }
+
+      const fallbackVariants: DesignModel[] = generateAllVariants(campaignInfo).map((v) => ({
+        ...v,
+        generationSource: 'fallback' as const,
+        model: 'V2 Master Template Engine',
+        aiSuccess: false,
+        fallbackReason: 'OPENAI_API_KEY is not configured in server environment.',
+      }));
 
       return NextResponse.json({
         success: true,
-        fallback: true,
-        message: 'AI servisine ulaşılamadı (API Key yapılandırılmadı). Kurumsal şablon kullanılarak tasarım oluşturuldu.',
+        aiSuccess: false,
+        generationSource: 'fallback',
+        model: 'V2 Master Template Engine',
+        fallbackReason: 'OPENAI_API_KEY is not configured in server environment.',
         variants: fallbackVariants,
       });
     }
 
     // Initialize official OpenAI SDK
     const openai = new OpenAI({ apiKey });
-    const model = process.env.OPENAI_IMAGE_MODEL || 'dall-e-2';
 
-    const safeGenerateImage = async (promptStr: string) => {
-      try {
-        return await openai.images.generate({
-          model,
-          prompt: promptStr,
-          n: 1,
-          size: model === 'dall-e-3' ? '1024x1792' : '1024x1024',
-        });
-      } catch (err: unknown) {
-        const errorObj = err as { status?: number; message?: string };
-        if (errorObj?.status === 400 && errorObj?.message?.includes('model')) {
-          return await openai.images.generate({
-            model: 'dall-e-2',
-            prompt: promptStr,
-            n: 1,
-            size: '1024x1024',
-          });
-        }
-        throw err;
+    // Image API execution helper
+    const executeOpenAIImage = async (promptText: string) => {
+      // Append reference photo context to prompt if user uploaded a reference image
+      let finalPrompt = promptText;
+      if (payload.uploadedImage) {
+        finalPrompt += ` Base image reference provided: Preserving ${payload.campaignTitle} destination atmosphere.`;
       }
+
+      return await openai.images.generate({
+        model: targetModel,
+        prompt: finalPrompt,
+        n: 1,
+        size: targetModel.includes('dall-e-3') || targetModel.includes('gpt-image') ? '1024x1792' : '1024x1024',
+      });
     };
 
-    // If single variant requested for regeneration
+    // Single Variant Regeneration
     if (requestedVariant) {
       let prompt = buildPriceHeroPrompt(payload);
       if (requestedVariant === 'DESTINATION_FOCUSED') prompt = buildDestinationHeroPrompt(payload);
       if (requestedVariant === 'DEAL_FOCUSED') prompt = buildCampaignHeroPrompt(payload);
 
-      const response = await safeGenerateImage(prompt);
+      try {
+        const response = await executeOpenAIImage(prompt);
+        const imageUrl = response?.data?.[0]?.url || payload.uploadedImage;
+        const updatedCampaign = { ...campaignInfo, backgroundImageUrl: imageUrl };
+        const allVariants = generateAllVariants(updatedCampaign);
+        const targetVariant = allVariants.find((v) => v.variantType === requestedVariant) || allVariants[0];
 
-      const imageUrl = response?.data?.[0]?.url || payload.uploadedImage;
-      const updatedCampaign = { ...campaignInfo, backgroundImageUrl: imageUrl };
-      const allVariants = generateAllVariants(updatedCampaign);
-      const targetVariant = allVariants.find((v) => v.variantType === requestedVariant) || allVariants[0];
+        const finalVariant: DesignModel = {
+          ...targetVariant,
+          generationSource: 'openai',
+          model: targetModel,
+          aiSuccess: true,
+          fallbackReason: null,
+        };
 
-      return NextResponse.json({
-        success: true,
-        fallback: false,
-        variant: targetVariant,
-      });
+        return NextResponse.json({
+          success: true,
+          aiSuccess: true,
+          generationSource: 'openai',
+          model: targetModel,
+          fallbackReason: null,
+          variant: finalVariant,
+        });
+      } catch (err: unknown) {
+        const errorMsg = (err as Error)?.message || 'OpenAI API call failed';
+        if (isStrict) {
+          return NextResponse.json(
+            {
+              success: false,
+              aiSuccess: false,
+              generationSource: 'failed',
+              model: targetModel,
+              fallbackReason: errorMsg,
+              error: errorMsg,
+            },
+            { status: 500 }
+          );
+        }
+
+        const fallbackVariant = generateAllVariants(campaignInfo).find((v) => v.variantType === requestedVariant);
+        return NextResponse.json({
+          success: true,
+          aiSuccess: false,
+          generationSource: 'fallback',
+          model: targetModel,
+          fallbackReason: errorMsg,
+          variant: fallbackVariant ? { ...fallbackVariant, generationSource: 'fallback', aiSuccess: false } : null,
+        });
+      }
     }
 
-    // Generate 3 AI Prompts
+    // Generate 3 AI Prompts for batch creation
     const promptPrice = buildPriceHeroPrompt(payload);
     const promptDest = buildDestinationHeroPrompt(payload);
     const promptDeal = buildCampaignHeroPrompt(payload);
 
-    // Call OpenAI API for the 3 variants concurrently
-    const [resPrice, resDest, resDeal] = await Promise.allSettled([
-      safeGenerateImage(promptPrice),
-      safeGenerateImage(promptDest),
-      safeGenerateImage(promptDeal),
-    ]);
+    try {
+      const [resPrice, resDest, resDeal] = await Promise.allSettled([
+        executeOpenAIImage(promptPrice),
+        executeOpenAIImage(promptDest),
+        executeOpenAIImage(promptDeal),
+      ]);
 
-    const urlPrice = resPrice.status === 'fulfilled' ? resPrice.value?.data?.[0]?.url : undefined;
-    const urlDest = resDest.status === 'fulfilled' ? resDest.value?.data?.[0]?.url : undefined;
-    const urlDeal = resDeal.status === 'fulfilled' ? resDeal.value?.data?.[0]?.url : undefined;
+      const urlPrice = resPrice.status === 'fulfilled' ? resPrice.value?.data?.[0]?.url : undefined;
+      const urlDest = resDest.status === 'fulfilled' ? resDest.value?.data?.[0]?.url : undefined;
+      const urlDeal = resDeal.status === 'fulfilled' ? resDeal.value?.data?.[0]?.url : undefined;
 
-    const baseVariants = generateAllVariants(campaignInfo);
+      const priceFailedReason = resPrice.status === 'rejected' ? resPrice.reason?.message : null;
+      const destFailedReason = resDest.status === 'rejected' ? resDest.reason?.message : null;
+      const dealFailedReason = resDeal.status === 'rejected' ? resDeal.reason?.message : null;
 
-    if (urlPrice) {
-      baseVariants[0].thumbnail = urlPrice;
-      const bgLayer = baseVariants[0].canvasData.elements.find((el) => el.id === 'bg-image');
-      if (bgLayer) bgLayer.src = urlPrice;
+      const anyAiSuccess = Boolean(urlPrice || urlDest || urlDeal);
+
+      if (isStrict && !anyAiSuccess) {
+        return NextResponse.json(
+          {
+            success: false,
+            aiSuccess: false,
+            generationSource: 'failed',
+            model: targetModel,
+            fallbackReason: priceFailedReason || destFailedReason || dealFailedReason || 'All 3 OpenAI image calls failed',
+            error: priceFailedReason || destFailedReason || dealFailedReason || 'All 3 OpenAI image calls failed',
+          },
+          { status: 500 }
+        );
+      }
+
+      const baseVariants = generateAllVariants(campaignInfo).map((v, idx) => {
+        let isVariantAiSuccess = false;
+        let aiUrl: string | undefined = undefined;
+
+        if (idx === 0 && urlPrice) {
+          isVariantAiSuccess = true;
+          aiUrl = urlPrice;
+        } else if (idx === 1 && urlDest) {
+          isVariantAiSuccess = true;
+          aiUrl = urlDest;
+        } else if (idx === 2 && urlDeal) {
+          isVariantAiSuccess = true;
+          aiUrl = urlDeal;
+        }
+
+        const variantObj = { ...v };
+        if (aiUrl) {
+          variantObj.thumbnail = aiUrl;
+          const bgLayer = variantObj.canvasData.elements.find((el) => el.id === 'bg-image');
+          if (bgLayer) bgLayer.src = aiUrl;
+        }
+
+        return {
+          ...variantObj,
+          generationSource: (isVariantAiSuccess ? 'openai' : 'fallback') as 'openai' | 'fallback',
+          model: targetModel,
+          aiSuccess: isVariantAiSuccess,
+          fallbackReason: isVariantAiSuccess ? null : priceFailedReason || destFailedReason || dealFailedReason,
+        };
+      });
+
+      return NextResponse.json({
+        success: true,
+        aiSuccess: anyAiSuccess,
+        generationSource: anyAiSuccess ? 'openai' : 'fallback',
+        model: targetModel,
+        fallbackReason: anyAiSuccess ? null : priceFailedReason || destFailedReason || dealFailedReason,
+        message: anyAiSuccess ? 'OpenAI AI Kreatifler üretildi.' : 'Fallback Kurumsal Şablonlar üretildi.',
+        variants: baseVariants,
+      });
+    } catch (err: unknown) {
+      const errorMsg = (err as Error)?.message || 'OpenAI API execution error';
+      if (isStrict) {
+        return NextResponse.json(
+          {
+            success: false,
+            aiSuccess: false,
+            generationSource: 'failed',
+            model: targetModel,
+            fallbackReason: errorMsg,
+            error: errorMsg,
+          },
+          { status: 500 }
+        );
+      }
+
+      const fallbackVariants = generateAllVariants(campaignInfo).map((v) => ({
+        ...v,
+        generationSource: 'fallback' as const,
+        model: targetModel,
+        aiSuccess: false,
+        fallbackReason: errorMsg,
+      }));
+
+      return NextResponse.json({
+        success: true,
+        aiSuccess: false,
+        generationSource: 'fallback',
+        model: targetModel,
+        fallbackReason: errorMsg,
+        variants: fallbackVariants,
+      });
     }
-    if (urlDest) {
-      baseVariants[1].thumbnail = urlDest;
-      const bgLayer = baseVariants[1].canvasData.elements.find((el) => el.id === 'bg-image');
-      if (bgLayer) bgLayer.src = urlDest;
-    }
-    if (urlDeal) {
-      baseVariants[2].thumbnail = urlDeal;
-      const bgLayer = baseVariants[2].canvasData.elements.find((el) => el.id === 'bg-image');
-      if (bgLayer) bgLayer.src = urlDeal;
-    }
-
-    return NextResponse.json({
-      success: true,
-      fallback: false,
-      message: '3 AI Kreatif başarıyla üretildi.',
-      variants: baseVariants,
-    });
   } catch (error: unknown) {
-    console.error('OpenAI Creative API Error:', error);
-
-    // Graceful fallback response on API error/timeout/rate-limit
-    return NextResponse.json({
-      success: false,
-      fallback: true,
-      error: 'Tasarım oluşturulamadı. Lütfen tekrar deneyin.',
-      rawMessage: (error as Error)?.message || 'Unknown OpenAI error',
-    }, { status: 500 });
+    const errorMsg = (error as Error)?.message || 'Unknown server error';
+    return NextResponse.json(
+      {
+        success: false,
+        aiSuccess: false,
+        generationSource: 'failed',
+        error: errorMsg,
+      },
+      { status: 500 }
+    );
   }
 }

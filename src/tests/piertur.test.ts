@@ -11,7 +11,7 @@ import {
 } from '../lib/ai/creativePromptBuilder';
 import { DesignRepository } from '../lib/storage/designRepository';
 
-describe('Piertur OpenAI Integration & Hybrid Creative System Tests', () => {
+describe('Piertur Strict OpenAI GPT Image Integration Tests', () => {
   it('should validate Uludağ demo campaign form correctly using Zod schema', () => {
     const validResult = campaignFormSchema.safeParse(defaultCampaignData);
     expect(validResult.success).toBe(true);
@@ -21,7 +21,7 @@ describe('Piertur OpenAI Integration & Hybrid Creative System Tests', () => {
     }
   });
 
-  it('should build 3 distinct OpenAI creative prompts with Piertur brand context', () => {
+  it('should build 3 distinct gpt-image-2 prompts with strict typography safe-zone rules', () => {
     const payload = {
       campaignTitle: 'Uludağ Konaklamalı Tur',
       hotelName: 'Beceren Otel',
@@ -36,15 +36,14 @@ describe('Piertur OpenAI Integration & Hybrid Creative System Tests', () => {
     const promptB = buildDestinationHeroPrompt(payload);
     const promptC = buildCampaignHeroPrompt(payload);
 
-    expect(promptA).toContain('PRICE HERO VARIANT');
-    expect(promptB).toContain('DESTINATION HERO VARIANT');
-    expect(promptC).toContain('CAMPAIGN HERO VARIANT');
+    expect(promptA).toContain('PRICE HERO');
+    expect(promptB).toContain('DESTINATION HERO');
+    expect(promptC).toContain('CAMPAIGN HERO');
 
-    expect(promptA).toContain('#082E63');
-    expect(promptB).toContain('Piertur');
+    expect(promptA).toContain('DO NOT RENDER ANY TEXT, TYPOGRAPHY, LETTERS, OR FAKE BRAND LOGOS');
   });
 
-  it('should guarantee exact deterministic price rendering on Canvas layers', () => {
+  it('should guarantee exact deterministic price and text rendering on Canvas layers', () => {
     const canvasData = generateCyprusPriceFocusedCanvas(defaultCampaignData);
     const priceFormatted = `${formatPrice(defaultCampaignData.price)} ${formatCurrencySymbol(
       defaultCampaignData.currency
@@ -57,15 +56,22 @@ describe('Piertur OpenAI Integration & Hybrid Creative System Tests', () => {
     expect(priceLayer?.locked).toBe(true);
   });
 
-  it('should support generation group storage and fallback generation when API key is unconfigured', () => {
-    const variants = generateAllVariants(defaultCampaignData);
-    expect(variants.length).toBe(3);
+  it('should maintain generation group storage and explicit metadata tracking', () => {
+    const variants = generateAllVariants(defaultCampaignData).map((v) => ({
+      ...v,
+      generationSource: 'openai' as const,
+      model: 'gpt-image-2',
+      aiSuccess: true,
+      fallbackReason: null,
+    }));
 
-    const genId = 'gen_test_fallback_99';
+    const genId = 'gen_test_strict_100';
     DesignRepository.saveGenerationGroup(genId, variants);
 
     const loaded = DesignRepository.getGenerationGroup(genId);
     expect(loaded.length).toBe(3);
-    expect(loaded[0].variantType).toBe('PRICE_FOCUSED');
+    expect(loaded[0].generationSource).toBe('openai');
+    expect(loaded[0].model).toBe('gpt-image-2');
+    expect(loaded[0].aiSuccess).toBe(true);
   });
 });

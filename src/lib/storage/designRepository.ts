@@ -7,9 +7,12 @@ const GEN_STORAGE_KEY = 'piertur_creative_generations_v1';
 
 export const initialMockDesigns: DesignModel[] = generateAllVariants(defaultCampaignData as CampaignInfo);
 
+const inMemoryStore: DesignModel[] = [...initialMockDesigns];
+const inMemoryGens: Record<string, string[]> = {};
+
 export class DesignRepository {
   public static getAll(): DesignModel[] {
-    if (typeof window === 'undefined') return initialMockDesigns;
+    if (typeof window === 'undefined') return inMemoryStore;
 
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -30,19 +33,26 @@ export class DesignRepository {
   }
 
   public static save(design: DesignModel): void {
+    const existingIdx = inMemoryStore.findIndex((item) => item.id === design.id);
+    const updatedDesign = {
+      ...design,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (existingIdx >= 0) {
+      inMemoryStore[existingIdx] = updatedDesign;
+    } else {
+      inMemoryStore.unshift(updatedDesign);
+    }
+
     if (typeof window === 'undefined') return;
 
     try {
       const all = this.getAll();
-      const existingIdx = all.findIndex((item) => item.id === design.id);
+      const idx = all.findIndex((item) => item.id === design.id);
 
-      const updatedDesign = {
-        ...design,
-        updatedAt: new Date().toISOString(),
-      };
-
-      if (existingIdx >= 0) {
-        all[existingIdx] = updatedDesign;
+      if (idx >= 0) {
+        all[idx] = updatedDesign;
       } else {
         all.unshift(updatedDesign);
       }
@@ -54,6 +64,9 @@ export class DesignRepository {
   }
 
   public static delete(id: string): void {
+    const idx = inMemoryStore.findIndex((item) => item.id === id);
+    if (idx >= 0) inMemoryStore.splice(idx, 1);
+
     if (typeof window === 'undefined') return;
 
     try {
@@ -82,11 +95,12 @@ export class DesignRepository {
   }
 
   public static saveGenerationGroup(generationId: string, designs: DesignModel[]): void {
+    designs.forEach((d) => this.save(d));
+    inMemoryGens[generationId] = designs.map((d) => d.id);
+
     if (typeof window === 'undefined') return;
 
     try {
-      designs.forEach((d) => this.save(d));
-
       const storedGens = localStorage.getItem(GEN_STORAGE_KEY);
       const gensMap = storedGens ? JSON.parse(storedGens) : {};
       gensMap[generationId] = designs.map((d) => d.id);
@@ -113,6 +127,12 @@ export class DesignRepository {
       } catch (e) {
         console.error('Failed to read generation group', e);
       }
+    }
+
+    if (inMemoryGens[generationId]) {
+      const ids = inMemoryGens[generationId];
+      const found = ids.map((id) => all.find((d) => d.id === id)).filter(Boolean) as DesignModel[];
+      if (found.length > 0) return found;
     }
 
     // Fallback to initial 3 variants
