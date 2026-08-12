@@ -11,27 +11,30 @@ export function buildPriceHeroPrompt(payload: CreativePayload): string {
   const ctx = analyzeCampaignContext(payload.campaignTitle, payload.benefits, payload.campaignBadge);
 
   return `
-Transform the supplied destination photograph (${payload.campaignTitle}) into an agency-grade premium Turkish travel advertising composition.
-Preserve the actual destination and photographic identity.
+Transform the supplied ${payload.campaignTitle} destination photograph into a premium agency-grade Turkish travel advertising composition for Instagram Story.
+
+Preserve the authentic ${payload.campaignTitle} destination and photographic identity.
 Destination Mood: ${ctx.visualMood}.
 Lighting: ${ctx.lightingStyle}.
 Color Accents: Piertur Navy (#082E63), Warm Gold (#FFB21C), Conversion Red (#E31C24), White (#FFFFFF).
 
-Create sophisticated commercial art direction suitable for a major travel operator's Instagram Story campaign.
-Use full-bleed cinematic destination photography, premium lighting, depth, sophisticated navy/gold/red visual accents and integrated promotional geometry.
-The final composition should feel designed by a senior advertising art director, not a web designer.
-Create intentional negative-space zones for headline, hotel information, price, campaign badge, CTA and footer.
+Create a sophisticated full-bleed commercial travel campaign visual with cinematic atmosphere, dimensional lighting, premium editorial composition and strong depth.
+The photograph must remain dominant across the entire canvas.
+
+CRITICAL VISUAL DIRECTIVES:
+- Do NOT divide the photograph into horizontal sections.
+- Do NOT create website cards, dashboard panels, UI boxes, pricing cards or app interface elements.
+- Create intentional negative space for a large destination headline in the upper-left/upper-middle region and a large price statement in the lower-middle region.
+- Integrate subtle Piertur navy, yellow and red visual accents into the photography using gradients, elegant geometric shapes and campaign-style graphic direction.
+- The result should look like a professionally art-directed travel agency campaign created by a senior advertising designer.
 
 CRITICAL NEGATIVE DIRECTIVES:
-- Do not render any text.
-- Do not render logos.
-- Do not render prices.
-- Do not invent typography.
-- Do not generate watermarks.
-- Avoid UI cards, dashboard aesthetics, generic rounded rectangles, web buttons and SaaS visual language.
-
-The photograph must remain visually dominant.
-Style: premium commercial travel campaign, high conversion, sophisticated but energetic, Turkish tourism advertising, editorial-meets-performance-marketing.
+- No logos.
+- No fake brands.
+- No readable text.
+- No generated typography.
+- No price.
+- Leave sophisticated clean typography-safe areas for deterministic overlays.
 `.trim();
 }
 

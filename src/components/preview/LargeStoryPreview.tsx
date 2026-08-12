@@ -36,7 +36,6 @@ export const LargeStoryPreview: React.FC<LargeStoryPreviewProps> = ({ canvasData
         img.crossOrigin = 'anonymous';
         img.onload = () => resolve({ id: layer.id, img });
         img.onerror = () => {
-          // Retry without crossOrigin if CORS blocks
           const fallbackImg = new Image();
           fallbackImg.onload = () => resolve({ id: layer.id, img: fallbackImg });
           fallbackImg.onerror = () => resolve({ id: layer.id, img: null });
@@ -77,9 +76,18 @@ export const LargeStoryPreview: React.FC<LargeStoryPreviewProps> = ({ canvasData
 
           if (layer.fill?.startsWith('linear-gradient')) {
             const gradient = ctx.createLinearGradient(0, layer.y, 0, layer.y + rectH);
-            gradient.addColorStop(0, 'rgba(8, 46, 99, 0.88)');
-            gradient.addColorStop(0.5, 'rgba(8, 46, 99, 0.4)');
-            gradient.addColorStop(1, 'rgba(8, 46, 99, 0.96)');
+            if (layer.id === 'bg-overlay-top') {
+              gradient.addColorStop(0, 'rgba(4, 20, 48, 0.65)');
+              gradient.addColorStop(0.6, 'rgba(4, 20, 48, 0.2)');
+              gradient.addColorStop(1, 'rgba(4, 20, 48, 0)');
+            } else if (layer.id === 'bg-overlay-bottom') {
+              gradient.addColorStop(0, 'rgba(4, 20, 48, 0)');
+              gradient.addColorStop(0.35, 'rgba(4, 20, 48, 0.55)');
+              gradient.addColorStop(1, 'rgba(4, 20, 48, 0.92)');
+            } else {
+              gradient.addColorStop(0, 'rgba(4, 20, 48, 0.6)');
+              gradient.addColorStop(1, 'rgba(4, 20, 48, 0.9)');
+            }
             ctx.fillStyle = gradient;
           } else {
             ctx.fillStyle = layer.fill || '#082E63';

@@ -21,10 +21,10 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
     'https://images.unsplash.com/photo-1551524559-8af4e6624178?auto=format&fit=crop&w=1080&q=80';
 
   const elements: CanvasLayer[] = [
-    // 1. Full-Bleed Destination Photo (0,0 -> 1080,1920 cover, 70%+ Photo Dominance)
+    // 1. Single Full-Bleed Destination Photo (0,0 -> 1080,1920 cover, 80%+ Photo Dominance)
     {
       id: 'bg-image',
-      name: 'Full-Bleed Destination Photo',
+      name: 'Full-Bleed Single Photo Background',
       type: 'image',
       x: 0,
       y: 0,
@@ -37,31 +37,31 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       zIndex: 1,
     },
 
-    // 2. Soft Gradient Vignettes for Contrast (NO SOLID RECTANGULAR BOXES)
+    // 2. Minimal Translucent Text Fades (NO HORIZONTAL SLICING, NO SOLID NAVY BLOCKS)
     {
       id: 'bg-overlay-top',
-      name: 'Top Readability Gradient',
+      name: 'Top Text Readability Fade',
       type: 'rect',
       x: 0,
       y: 0,
       width: 1080,
-      height: 520,
-      fill: 'linear-gradient(180deg, rgba(4, 20, 48, 0.8) 0%, rgba(4, 20, 48, 0.35) 60%, rgba(4, 20, 48, 0) 100%)',
-      opacity: 0.9,
+      height: 480,
+      fill: 'linear-gradient(180deg, rgba(4, 20, 48, 0.65) 0%, rgba(4, 20, 48, 0.2) 60%, rgba(4, 20, 48, 0) 100%)',
+      opacity: 0.85,
       locked: true,
       visible: true,
       zIndex: 2,
     },
     {
       id: 'bg-overlay-bottom',
-      name: 'Bottom Content Gradient',
+      name: 'Bottom Price Readability Fade',
       type: 'rect',
       x: 0,
-      y: 950,
+      y: 1000,
       width: 1080,
-      height: 970,
-      fill: 'linear-gradient(180deg, rgba(4, 20, 48, 0) 0%, rgba(4, 20, 48, 0.75) 30%, rgba(4, 20, 48, 0.96) 100%)',
-      opacity: 0.96,
+      height: 920,
+      fill: 'linear-gradient(180deg, rgba(4, 20, 48, 0) 0%, rgba(4, 20, 48, 0.55) 35%, rgba(4, 20, 48, 0.92) 100%)',
+      opacity: 0.92,
       locked: true,
       visible: true,
       zIndex: 2,
@@ -75,9 +75,9 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
             name: 'Piertur Custom Logo Image',
             type: 'image' as const,
             x: 60,
-            y: 75,
+            y: 70,
             width: 240,
-            height: 64,
+            height: 60,
             src: brandKit.logoUrl,
             fit: 'contain' as const,
             locked: true,
@@ -91,11 +91,11 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
             name: 'Logo Mark Frame',
             type: 'rect' as const,
             x: 60,
-            y: 75,
-            width: 260,
-            height: 60,
-            fill: 'rgba(8, 46, 99, 0.9)',
-            borderRadius: 14,
+            y: 70,
+            width: 250,
+            height: 56,
+            fill: 'rgba(8, 46, 99, 0.85)',
+            borderRadius: 12,
             stroke: '#FFB21C',
             strokeWidth: 2,
             locked: true,
@@ -106,10 +106,10 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
             id: 'logo-text-primary',
             name: 'Piertur Brand Text',
             type: 'text' as const,
-            x: 82,
-            y: 90,
+            x: 80,
+            y: 84,
             text: 'PIERTUR',
-            fontSize: 28,
+            fontSize: 26,
             fontFamily: 'Montserrat, sans-serif',
             fontWeight: '900',
             fill: '#FFFFFF',
@@ -125,14 +125,14 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       id: 'campaign-ribbon-bg',
       name: 'Angled Campaign Ribbon',
       type: 'rect',
-      x: 580,
-      y: 75,
-      width: 440,
-      height: 64,
+      x: 600,
+      y: 70,
+      width: 420,
+      height: 60,
       fill: '#E31C24',
-      borderRadius: 16,
+      borderRadius: 14,
       stroke: '#FFB21C',
-      strokeWidth: 2.5,
+      strokeWidth: 2,
       locked: true,
       visible: true,
       zIndex: 3,
@@ -141,10 +141,10 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       id: 'campaign-ribbon-text',
       name: 'Campaign Ribbon Text',
       type: 'text',
-      x: 800,
-      y: 94,
+      x: 810,
+      y: 88,
       text: `🔥 ${badge}`,
-      fontSize: 22,
+      fontSize: 20,
       fontFamily: 'Montserrat, sans-serif',
       fontWeight: '800',
       fill: '#FFFFFF',
@@ -161,7 +161,7 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       name: 'Main Destination Headline',
       type: 'text',
       x: 60,
-      y: 185,
+      y: 175,
       text: headline.primary,
       fontSize: 110,
       fontFamily: 'Montserrat, sans-serif',
@@ -178,7 +178,7 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       name: 'Secondary Accent Subtitle',
       type: 'text',
       x: 60,
-      y: 305,
+      y: 295,
       text: headline.secondary || 'KONAKLAMALI TUR',
       fontSize: 44,
       fontFamily: 'Montserrat, sans-serif',
@@ -190,13 +190,13 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       zIndex: 6,
     },
 
-    // 6. Typographic Hotel Line (NO SOLID BLUE/BLACK RECTANGULAR BOX)
+    // 6. Typographic Hotel Line (NO SOLID BOX OR BAR)
     {
       id: 'hotel-info-text',
       name: 'Hotel Information Text',
       type: 'text',
       x: 60,
-      y: 365,
+      y: 355,
       text: `🏨 ${hotelText} KONAKLAMALI ★★★★★`,
       fontSize: 24,
       fontFamily: 'Montserrat, sans-serif',
@@ -208,13 +208,13 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       zIndex: 7,
     },
 
-    // 7. Hero Price Callout (Floating Advertising Typography - NO SOLID CARD BOX!)
+    // 7. Hero Price Callout (Floating Directly Over Photo Background - NO SOLID CARD BOX!)
     {
       id: 'price-prefix',
       name: 'Hero Price Prefix Callout',
       type: 'text',
       x: 60,
-      y: 1060,
+      y: 1120,
       text: campaign.pricePrefix.toUpperCase(),
       fontSize: 26,
       fontFamily: 'Montserrat, sans-serif',
@@ -230,7 +230,7 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       name: 'Hero Price Giant Typography',
       type: 'text',
       x: 60,
-      y: 1100,
+      y: 1160,
       text: priceFormatted,
       fontSize: 120,
       fontFamily: 'Montserrat, sans-serif',
@@ -246,7 +246,7 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       name: 'Hero Price Suffix Note',
       type: 'text',
       x: 60,
-      y: 1240,
+      y: 1300,
       text: `${campaign.priceSuffix} • ⚡ SINIRLI KONTENJAN`,
       fontSize: 22,
       fontFamily: 'Montserrat, sans-serif',
@@ -263,7 +263,7 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       name: 'Duration Stay Text',
       type: 'text',
       x: 60,
-      y: 1290,
+      y: 1350,
       text: `🗓️ ${durationBoardText}`,
       fontSize: 24,
       fontFamily: 'Montserrat, sans-serif',
@@ -275,13 +275,13 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       zIndex: 14,
     },
 
-    // 9. Departure Cities Line (NO BLUE RECTANGLE)
+    // 9. Departure Cities Line (NO BLUE BOX)
     {
       id: 'cities-text',
       name: 'Departure Cities Text',
       type: 'text',
       x: 60,
-      y: 1340,
+      y: 1400,
       text: citiesText,
       fontSize: 22,
       fontFamily: 'Montserrat, sans-serif',
@@ -293,33 +293,7 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       zIndex: 15,
     },
 
-    // 10. Benefit Icon List (2-Column Typographic Layout - NO BLUE PILL CONTAINERS!)
-    ...campaign.tags.slice(0, 4).map((tag, idx) => {
-      const col = idx % 2;
-      const row = Math.floor(idx / 2);
-      const tagX = 60 + col * 490;
-      const tagY = 1390 + row * 60;
-
-      return [
-        {
-          id: `adv-text-${idx}`,
-          name: `Advantage Text ${idx + 1}`,
-          type: 'text' as const,
-          x: tagX,
-          y: tagY,
-          text: `✔ ${tag}`,
-          fontSize: 22,
-          fontFamily: 'Montserrat, sans-serif',
-          fontWeight: '700',
-          fill: '#FFFFFF',
-          locked: true,
-          visible: true,
-          zIndex: 17,
-        },
-      ];
-    }).flat(),
-
-    // 11. Integrated Angled Red Banner CTA (Advertising Graphic Banner)
+    // 10. Integrated Angled Red Banner CTA (Advertising Banner)
     {
       id: 'cta-button-bg',
       name: 'Angled Red Banner CTA Frame',
@@ -354,15 +328,15 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       zIndex: 21,
     },
 
-    // 12. Sleek Branded Corporate Footer Strip
+    // 11. Minimal Thin Branded Corporate Footer Strip
     {
       id: 'footer-bar-bg',
       name: 'Corporate Footer Bar Container',
       type: 'rect',
       x: 0,
-      y: 1800,
+      y: 1815,
       width: 1080,
-      height: 120,
+      height: 105,
       fill: 'rgba(4, 20, 48, 0.95)',
       locked: true,
       visible: true,
@@ -373,7 +347,7 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       name: 'Footer Website Link',
       type: 'text',
       x: 60,
-      y: 1845,
+      y: 1852,
       text: `🌐 ${brandKit.website || 'piertur.com'}`,
       fontSize: 24,
       fontFamily: 'Montserrat, sans-serif',
@@ -388,7 +362,7 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       name: 'Footer Social Media Handle',
       type: 'text',
       x: 430,
-      y: 1845,
+      y: 1852,
       text: `📸 ${brandKit.socialHandle || '@piertur'}`,
       fontSize: 24,
       fontFamily: 'Montserrat, sans-serif',
@@ -403,7 +377,7 @@ export function generateCyprusPriceFocusedCanvas(campaign: CampaignInfo): Canvas
       name: 'Footer Direct Call Center',
       type: 'text',
       x: 750,
-      y: 1845,
+      y: 1852,
       text: `📞 ${brandKit.phone || '444 0 743'}`,
       fontSize: 24,
       fontFamily: 'Montserrat, sans-serif',

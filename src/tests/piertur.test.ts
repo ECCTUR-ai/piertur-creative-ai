@@ -34,7 +34,7 @@ describe('Piertur Final GPT Image 2 Creative Director Architecture Tests', () =>
     const prompt2 = buildDestinationHeroPrompt(payload);
     const prompt3 = buildCampaignHeroPrompt(payload);
 
-    expect(prompt1).toContain('high conversion');
+    expect(prompt1).toContain('senior advertising designer');
     expect(prompt2).toContain('luxury editorial travel magazine');
     expect(prompt3).toContain('flash-deal promotional tourism campaign');
   });
